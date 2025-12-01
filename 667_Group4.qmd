@@ -1,0 +1,33 @@
+---
+title: "667-Group4"
+format: pdf
+editor: visual
+---
+
+### Introduction
+
+
+
+### GLM
+
+
+
+### GEE
+
+
+
+### GLMM
+
+
+
+### Comparison
+
+
+
+### Discussion
+
+
+
+
+### Conclusion
+
