@@ -6,28 +6,350 @@ editor: visual
 
 ### Introduction
 
-
-
 ### GLM
-
-
 
 ### GEE
 
-
-
 ### GLMM
 
+```{r}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(broom)
+  library(broom.mixed)
+  library(geepack)
+  library(lme4)
+  library(scales)
+  library(MASS)      # for glm.nb
+  library(performance)
+  library(car)
+  library(ggplot2)
+  library(gridExtra) 
+})
+set.seed(667)
+```
 
+#### Exploratory plots
+
+```{r}
+data <- read_csv('cleaned_diabetes_longitudinal_Nov29.csv')
+glimpse(data)
+data$patient_nbr <- as.factor(data$patient_nbr)
+data$admission_type_id <- as.factor(data$admission_type_id)
+data$race <- as.factor(data$race)
+data$gender <- as.factor(data$gender)
+data$age <- as.factor(data$age)
+data$insulin <- as.factor(data$insulin)
+data$readmit30 <- as.factor(data$readmit30)
+data$age <- relevel(data$age, ref = "50-80")
+data$insulin <- relevel(data$insulin, ref = "No")
+
+data$encounter_index_trunc_c <-  data$encounter_index_trunc - mean(data$encounter_index_trunc)
+
+data$time_in_hospital <- scale(data$time_in_hospital)
+data$num_medications <- scale(data$num_medications)
+data$number_emergency <- scale(data$number_emergency)
+data$number_inpatient <- scale(data$number_inpatient)
+```
+
+Four numeric covariates were standardized to facilitate model convergence and improve the numerical stability of the optimization algorithm. Use centered time (encounter_index_trunc_c = encounter_index_trunc - mean(encounter_index_trunc)) for easier interpretation of main effects.
+
+#### Fit random intercept model
+
+We employed adaptive Gauss-Hermite quadrature with 10 integration points (nAGQ = 10) rather than the standard Laplace approximation (nAGQ = 1). For binary response data, the standard Laplace approximation is known to potentially underestimate the variance of random effects and introduce bias into the fixed effects coefficients. Increasing the number of quadrature points provides a more accurate approximation of the log-likelihood, thereby yielding more reliable parameter estimates.
+
+```{r}
+# Convergence using Laplace
+m1 <- glmer(readmit30 ~ insulin * encounter_index_trunc_c + 
+                      time_in_hospital + num_medications + 
+                      number_emergency + number_inpatient + 
+                      admission_type_id + age + gender + race +
+                      (1 | patient_nbr), 
+                    data = data, 
+                    family = binomial(link = "logit"), nAGQ = 10,
+                    control = glmerControl(optimizer = "bobyqa", 
+                                           optCtrl = list(maxfun = 2e5)))
+```
+
+We need LRT to check the interaction term
+
+```{r}
+m2 <- glmer(readmit30 ~ insulin + encounter_index_trunc_c + 
+            time_in_hospital + num_medications + 
+            number_emergency + number_inpatient + 
+            admission_type_id + age + gender + race +
+            (1 | patient_nbr), 
+            data = data, family = binomial, nAGQ = 10,
+            control = glmerControl(optimizer = "bobyqa", 
+                                   optCtrl = list(maxfun = 2e5)))
+anova(m1, m2)
+```
+
+To assess whether the effect of time (encounter index) on readmission risk varies by insulin status, we compared the full model (including the interaction term) against a reduced model (main effects only) using a Likelihood Ratio Test (LRT).
+
+The LRT indicated that the inclusion of the interaction term `insulin * encounter_index_trunc_c` resulted in a statistically significant improvement in model fit ($\chi^2(3) = 16.11$, $p < 0.005$). Furthermore, the Akaike Information Criterion (AIC) decreased substantially from 4019.0 in the reduced model to 4008.9 in the full model, confirming that the interaction model provides a superior fit to the data. This suggests that the trajectory of readmission risk over time is significantly different depending on the patient's insulin regimen.
+
+#### Random Slopes Model
+
+nAGQ = 10 can't be used in the random slope model, so we use nAGQ = 1 here.
+
+```{r}
+m3 <- glmer(readmit30 ~ insulin * encounter_index_trunc_c + 
+            time_in_hospital + num_medications + 
+            number_emergency + number_inpatient + 
+            admission_type_id + age + gender + race +
+            (1 + encounter_index_trunc_c | patient_nbr),       
+            data = data, family = binomial, nAGQ = 1,
+            control = glmerControl(optimizer = "bobyqa", 
+                                   optCtrl = list(maxfun = 2e5)))
+
+anova(m1, m3)
+```
+
+We evaluated the necessity of including random slopes for the time effect (`encounter_index_trunc_c`) to allow for inter-individual variation in the trajectory of readmission risk. A Likelihood Ratio Test comparing the random-slope model (`m3`) against the random-intercept-only model (`m1`) showed a statistically significant improvement in model fit ($\chi^2(2) = 14.42$, $p < 0.001$). Additionally, the random-slope model exhibited a lower AIC (3998.5 vs. 4008.9), indicating a better trade-off between goodness of fit and model complexity. Consequently, we selected the random-slope model (`m3`) as the final model. This suggests that not only do baseline risks vary across patients, but the rate of change in readmission risk over time also varies significantly between individuals.
+
+```{r}
+summary(m3)
+# Check Convergence / ICC
+m3@optinfo$conv$lme4
+icc(m3)
+```
+
+------------------------------------------------------------------------
+
+#### Interaction Effects
+
+There was a significant interaction between insulin status and the timing of encounters. For the reference group (patients not on insulin), the probability of 30-day readmission showed a steep and significant decline over successive visits ($\beta_{time} = -0.462$, $p < 0.001$). However, this protective temporal trend was significantly attenuated for patients on steady insulin ($\beta_{interaction} = 0.232$, $p = 0.014$) and further diminished for patients whose insulin dosage was increased ($\beta_{interaction} = 0.329$, $p = 0.004$). This indicates that while Insulin Up patients did experience a marginal reduction in risk over time, their **rate of recovery was significantly slower and flatter** compared to patients not requiring insulin therapy.
+
+#### ICC and Variance
+
+The Adjusted Intraclass Correlation Coefficient (ICC) was 0.113, indicating that approximately 11.3% of the latent variation in readmission risk is attributable to unobserved heterogeneity between patients (such as unique genetics, chronic frailty, or compliance behavior). The remaining variation is driven by within-patient time-varying factors or random noise. An ICC exceeding 10% confirms substantial clustering within subjects, validating the necessity of the mixed-effects framework to account for non-independence in the data.
+
+#### Covariance Matrix
+
+The model's direct Maximum Likelihood Estimation (MLE) of the covariance matrix yielded a correlation coefficient of only $\rho = -0.04$. This parameter represents the unbiased population-level relationship. A correlation of -0.04 is statistically negligible, indicating that in the true underlying population, a patient's baseline risk level is effectively independent of their rate of change over time.
+
+#### Diagnostic
+
+```{r}
+rand_effects <- ranef(m3)$patient_nbr
+
+colnames(rand_effects) <- c("Intercept", "Slope")
+
+p_qq_int <- ggplot(rand_effects, aes(sample = Intercept)) +
+  stat_qq(color = "blue", alpha = 0.5) +
+  stat_qq_line(color = "red", linetype = "dashed") +
+  labs(title = "Q-Q Plot: Random Intercepts",
+       subtitle = "Normality of Baseline Risk",
+       x = "Theoretical", y = "Sample") +
+  theme_minimal()
+
+p_qq_slope <- ggplot(rand_effects, aes(sample = Slope)) +
+  stat_qq(color = "darkgreen", alpha = 0.5) +
+  stat_qq_line(color = "red", linetype = "dashed") +
+  labs(title = "Q-Q Plot: Random Slopes",
+       subtitle = "Normality of Time Effect",
+       x = "Theoretical", y = "Sample") +
+  theme_minimal()
+
+p_scatter <- ggplot(rand_effects, aes(x = Intercept, y = Slope)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +  
+  geom_vline(xintercept = 0, linetype="dashed", alpha=0.3) +
+  geom_hline(yintercept = 0, linetype="dashed", alpha=0.3) +
+  labs(title = "Intercept vs. Slope Correlation",
+       subtitle = paste0("Cor: ", round(cor(rand_effects$Intercept, rand_effects$Slope), 3)),
+       x = "Random Intercept (Baseline Risk)",
+       y = "Random Slope (Rate of Change)") +
+  theme_minimal()
+
+grid.arrange(p_qq_int, p_qq_slope, p_scatter, ncol = 2)
+```
+
+**Evaluation of Random Effects Structure:** The diagnostic plots for the random effects structure (Model `m3`) revealed deviations from ideal normality for both random intercepts and random slopes. The Q-Q plots exhibit a "stepped" pattern, which is a characteristic artifact in generalized linear mixed models (GLMMs) when the outcome is binary and cluster sizes are small (i.e., limited visits per patient).
+
+Despite these deviations, two key insights emerged: 1. Correlation of Effects: We observed a moderate negative correlation ($\rho = -0.291$) between the random intercepts and slopes. This suggests a regression to the mean dynamic: patients with higher baseline risks (higher intercepts) tend to experience a sharper decline in risk over time (more negative slopes), whereas lower-risk patients exhibit more stable trajectories. 2. Model Robustness: Although the random effects distributions are not perfectly normal, previous simulation studies in GLMMs have demonstrated that fixed effect estimates remain robust to misspecification of the random effects distribution, especially given our large sample size. Therefore, retaining the random-slope structure provides a more realistic representation of patient heterogeneity without compromising the validity of the fixed effect inferences.
+
+The discrepancy between the visual estimate (-0.291) and the model estimate (-0.04) is explained by the **'Shrinkage Effect'** common in GLMMs. Because many patients have few visits, the model 'shrinks' their uncertain individual estimates toward the population mean, which mathematically forces a spurious negative correlation in the scatterplot. **Therefore, we rely on the model output (-0.04) as the valid inference.** Our final clinical conclusion is that a patient's starting frailty (intercept) does not predict how fast they will stabilize (slope); these are two distinct biological characteristics.
+
+```{r}
+isSingular(m3)
+vif(m3)
+```
+
+We assessed multicollinearity using the Generalized Variance Inflation Factor (GVIF). All predictors showed low GVIF values, falling well below the conservative threshold of 5.
+
+#### Simulation
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+vc <- attr(VarCorr(m3)$patient_nbr, "stddev")
+sigma_int <- vc["(Intercept)"]
+sigma_slp <- vc["encounter_index_trunc_c"]
+
+beta_int   <- fixef(m3)["(Intercept)"]
+beta_time  <- fixef(m3)["encounter_index_trunc_c"]
+beta_ins   <- fixef(m3)["insulinSteady"]
+beta_inter <- fixef(m3)["insulinSteady:encounter_index_trunc_c"]
+
+avg_fixed <- mean(predict(m3, type="link", re.form=NA))
+
+visits <- seq(1, 6, length.out = 100)
+visits_c <- visits - mean(data$encounter_index_trunc_c)
+
+scenarios <- expand.grid(
+  Visit = visits,
+  Baseline_Type = c("High Baseline", "Avg Baseline", "Low Baseline"),
+  Recovery_Speed = c("Slow Recovery (Flat)", "Fast Recovery (Steep)")
+)
+
+scenarios <- scenarios %>%
+  mutate(
+    z_int = case_when(
+      Baseline_Type == "High Baseline" ~ 1.96,
+      Baseline_Type == "Avg Baseline"  ~ 0,
+      Baseline_Type == "Low Baseline"  ~ -1.96
+    ),
+    z_slp = case_when(
+      Recovery_Speed == "Slow Recovery (Flat)"  ~ 1.96,
+      Recovery_Speed == "Fast Recovery (Steep)" ~ -1.96
+    )
+  )
+
+# LogOdds = Fixed_Part + (z_int * sigma_int) + (Fixed_Slope + z_slp * sigma_slp) * Time
+scenarios$LogOdds <- avg_fixed + 
+                     (scenarios$z_int * sigma_int) + 
+                     ((beta_time + beta_inter + scenarios$z_slp * sigma_slp) * visits_c) 
+scenarios <- scenarios %>%
+  mutate(
+    visits_centered = Visit - mean(data$encounter_index_trunc_c),
+    LogOdds = avg_fixed + 
+              (z_int * sigma_int) + 
+              (beta_time + beta_inter + z_slp * sigma_slp) * visits_centered,
+    Prob = plogis(LogOdds)
+  )
+
+ggplot(scenarios, aes(x = Visit, y = Prob, color = Baseline_Type, linetype = Recovery_Speed)) +
+  geom_line(size = 1.2) +
+  scale_color_manual(values = c("grey60", "red", "blue")) + # Avg, High, Low
+  scale_linetype_manual(values = c("solid", "dashed")) +    # Fast, Slow
+  scale_y_continuous(labels = scales::percent, limits = c(0, NA)) +
+  labs(
+    title = "Patient Heterogeneity: Baseline vs. Recovery Speed",
+    subtitle = "Decoupling 'Where they start' from 'How fast they improve' (Model m3)",
+    x = "Encounter Number",
+    y = "Predicted Probability of Readmission",
+    color = "Starting Risk (Intercept)",
+    linetype = "Response Rate (Slope)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    legend.key.width = unit(2, "cm"),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+Our Random Slope model (m3) reveals a more nuanced reality because the correlation between baseline and slope is near zero.
+
+In this simulation, we visualize 6 scenarios: \> **The Color (Baseline Risk):** Shows where a patient starts. Red is high risk, Blue is low risk. \> **The Linetype (Recovery Speed):** Shows how they respond to repeated visits. \> **Solid Line (Fast Recovery):** These patients respond well; their risk drops steeply. \> **Dashed Line (Slow Recovery):** These patients are 'resistant' to improvement; their risk stays flat.
+
+Crucially, look at the Red Solid Line vs. the Red Dashed Line. Both start as 'High Risk' patients. But one responds rapidly to care (Solid), while the other remains chronically ill (Dashed). Identifying which 'High Risk' patient we are dealing with is critical for personalized resource allocation."
+
+```{r}
+preds <- augment(m3, data = data, type.predict = "response")
+
+set.seed(42)
+sample_subjects <- sample(unique(data$patient_nbr), 9)
+
+preds %>%
+  filter(patient_nbr %in% sample_subjects) %>%
+  ggplot(aes(x = encounter_index_trunc_c, y = .fitted, color = insulin, group = patient_nbr)) +
+  geom_line(size = 1, alpha = 0.8) +
+  geom_jitter(aes(y = as.numeric(as.character(readmit30))), 
+              height = 0.02, width = 0.05, shape = 21, fill = "white", size = 2.5, stroke = 1) +
+  
+  labs(
+    y = "Predicted Probability of Readmission",
+    x = "Encounter Number",
+    title = "Subject-Specific Predicted Trajectories (Sample n=9)",
+    subtitle = "Lines = GLMM fitted values (BLUPs); Points = Observed Outcomes (0=No, 1=Yes)",
+    color = "Insulin Status"
+  ) +
+
+  scale_y_continuous(labels = scales::percent, limits = c(-0.05, 1.05), breaks = seq(0, 1, 0.2)) +
+  scale_x_continuous(breaks = 1:6) +
+  scale_color_brewer(palette = "Set1") + 
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "bottom"
+  )
+```
+
+```{r}
+sigma2_b <- VarCorr(m3)$patient_nbr[1,1]
+print(paste0("Random Intercept Variance (sigma^2_b): ", round(sigma2_b, 4)))
+
+# Extract treatment effect
+cond_est <- tidy(m3, effects = "fixed", conf.int = TRUE) %>%
+  dplyr::select(term, estimate, std.error, conf.low, conf.high)
+
+# Apply Zeger attenuation formula
+zeger_factor <- sqrt(1 + 0.346 * sigma2_b)
+attenuation_pct <- (1 - 1/zeger_factor) * 100
+
+print(paste0("Zeger Attenuation Factor: ", round(zeger_factor, 4)))
+print(paste0("Attenuation Percentage: ", round(attenuation_pct, 2), "%"))
+
+zeger_table <- cond_est %>%
+  mutate(
+    # Conditional Results
+    Cond_Beta = estimate,
+    Cond_OR = exp(estimate),
+    # Zeger Approximate Marginal Results
+    Marg_Beta_Approx = estimate / zeger_factor,
+    Marg_OR_Approx = exp(estimate / zeger_factor)
+  ) %>%
+  dplyr::select(term, Cond_Beta, Cond_OR, Marg_Beta_Approx, Marg_OR_Approx) %>%
+  filter(term != "(Intercept)") # Focus on effects
+knitr::kable(zeger_table, digits = 3, caption = "Conditional (GLMM) vs. Approximate Marginal (Zeger) Effects")
+```
+
+------------------------------------------------------------------------
+
+#### Results: Analysis of 30-Day Readmission Risk (Random-Slope GLMM)
+
+##### 1. Model Selection and Specification
+
+We employed a Generalized Linear Mixed Model (GLMM) to assess predictors of 30-day readmission. While the initial model included only random intercepts, a Likelihood Ratio Test (LRT) indicated that adding random slopes for the time effect significantly improved model fit ($\chi^2 = 14.42, p < 0.001$). Consequently, the final model (`m3`) included both random intercepts and random slopes, allowing each patient to have a unique baseline risk and a unique trajectory of risk evolution over time.
+
+##### 2. Random Effects and Subject Heterogeneity
+
+The final model revealed substantial patient heterogeneity. The variance of the random intercept was **0.175** ($\text{SD} = 0.418$), indicating significant differences in initial frailty across patients. The variance of the random slope was **0.165** ($\text{SD} = 0.406$), confirming that patients recover (or deteriorate) at significantly different rates. The correlation between random intercepts and slopes was negligible ($\rho = -0.04$), suggesting that a patient's baseline risk is largely independent of their rate of recovery. The Adjusted Intraclass Correlation Coefficient (ICC) was **0.113**, implying that approximately **11.3%** of the variation in readmission risk is attributable to unobserved subject-specific characteristics.
+
+##### 3. Fixed Effects: The Interaction of Insulin and Time
+
+The analysis demonstrated a significant interaction between insulin status and the timing of encounters. Protective Trend in Reference Group: For patients not on insulin, the probability of readmission decreased steeply with successive visits ($\text{Cond. OR} = 0.630$, $\beta = -0.462, p < 0.001$), indicating a strong 'learning' or stabilization effect. Attenuation in Insulin Groups:\*\* This protective temporal trend was significantly blunted for patients on insulin. The interaction term for the Insulin Steady group was significant ($\beta_{interaction} = 0.232, p = 0.014$), and even more pronounced for the Insulin Up group ($\beta_{interaction} = 0.329, p = 0.004$). While 'Insulin Up' patients still experienced a slight decrease in risk over time (Net slope $\approx -0.13$), their rate of improvement was significantly slower compared to the reference group.
+
+##### 4. Conditional vs. Approximate Marginal Effects (Zeger Method)
+
+Since GLMM parameters represent subject-specific (conditional) effects, we applied Zeger's method to approximate population-averaged (marginal) effects.The Zeger attenuation factor was **1.03**, resulting in a modest **2.89% reduction** in effect sizes when scaling from the individual to the population level. The Conditional ORs and Marginal ORs remained highly consistent (e.g., Insulin Up Cond. OR = 1.129 vs. Marg. OR = 1.125). This suggests that despite patient heterogeneity, the observed risk factors apply robustly to the population average.
+
+##### 5. Other Clinical Predictors
+
+Controlling for the time-insulin interaction, other clinical factors showed the following associations: Prior inpatient visits remained a significant predictor, with each additional visit increasing the odds of readmission by 16.4% ($\text{Cond. OR} = 1.164, p = 0.019$).The number of medications showed a borderline significant association ($\text{Cond. OR} = 1.100, p = 0.051$), serving as a likely proxy for comorbidity complexity. Age, gender, and race were not statistically significant in this adjusted longitudinal framework.
+
+------------------------------------------------------------------------
+
+#### Summary Conclusion
+
+In conclusion, the **Random Slope model** provides superior fit, revealing that patients differ not only in their baseline risk but also in their recovery trajectories. While the "No Insulin" group exhibits a rapid decline in readmission risk over repeated encounters, patients requiring insulin dose escalation ("Insulin Up") show a significantly **flatter recovery curve**. This suggests that insulin intensification serves as a marker for a more resistant, high-risk phenotype that benefits less from the standard "stabilization over time" effect.
 
 ### Comparison
 
-
-
 ### Discussion
 
-
-
-
 ### Conclusion
-
