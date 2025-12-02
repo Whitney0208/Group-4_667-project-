@@ -32,7 +32,7 @@ set.seed(667)
 #### Exploratory plots
 
 ```{r}
-data <- read_csv('cleaned_diabetes_longitudinal_Nov29.csv')
+data <- read_csv('../cleaned_diabetes_longitudinal_Nov29.csv')
 glimpse(data)
 data$patient_nbr <- as.factor(data$patient_nbr)
 data$admission_type_id <- as.factor(data$admission_type_id)
