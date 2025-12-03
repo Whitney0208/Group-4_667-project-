@@ -6,7 +6,277 @@ editor: visual
 
 ### Introduction
 
+
 ### GLM
+
+```{r include=FALSE}
+suppressPackageStartupMessages({
+library(broom)
+library(dplyr)
+library(car)
+library(ResourceSelection)
+library(pROC)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(sandwich)
+library(lmtest)
+})
+```
+
+```{r include=FALSE}
+dat <- read.csv("C:\\Users\\estel\\OneDrive\\Documents\\Desktop\\UNC\\BIOS667\\HW\\Final Project\\cleaned_diabetes_longitudinal_Nov29.csv")
+dat$insulin <- relevel(factor(dat$insulin), ref = "No")
+dat$age <- factor(dat$age)
+dat$gender <- factor(dat$gender)
+dat$race <- factor(dat$race)
+dat$admission_type_id <- factor(dat$admission_type_id)
+
+# Frequency table: how many patients have 2, 3, 4… encounters
+enc_per_patient <- table(dat$patient_nbr)
+table(enc_per_patient)
+
+#Truncate encounter_index
+dat$encounter_index_trunc <- pmin(dat$encounter_index, 5)
+table(dat$encounter_index_trunc)
+
+lapply(dat[, sapply(dat, is.factor)], levels)
+```
+
+```{r echo=FALSE}
+#GLM with encounter_index_trunc
+fit_glm <- glm(
+  readmit30 ~ insulin + age + gender + race +
+    num_medications + time_in_hospital +
+    number_emergency + number_inpatient +
+    admission_type_id + encounter_index_trunc,
+  family = binomial(link = "logit"),
+  data = dat
+)
+
+summary(fit_glm)
+
+#GLM without encounter_index_trunc
+fit_glm_2 <- glm(
+  readmit30 ~ insulin + age + gender + race +
+    num_medications + time_in_hospital +
+    number_emergency + number_inpatient +
+    admission_type_id,
+  family = binomial(link = "logit"),
+  data = dat
+)
+summary(fit_glm_2)
+```
+
+Here two logistic GLMs were fitted. One includes a truncated encounter index(capped at 5), and one without it. Including encounter_trunc improved model fit (AIC 4026 vs 4047) and reduced residual deviance (3992.2 vs 4015). The truncated index was highly significant(p<0.001). 
+
+```{r or-table, echo=FALSE, message=FALSE}
+OR_table <- exp(cbind(OR = coef(fit_glm), confint(fit_glm)))
+pvals <- summary(fit_glm)$coef[, 4]
+
+final_table <- cbind(OR_table, p.value = pvals)
+
+kable(
+  final_table,
+  caption = "Odds Ratios (OR) with 95% Confidence Intervals for Logistic GLM",
+  digits = 4
+)
+```
+
+In the full GLM model, several predictors were significantly associated with 30-day readmission, including age 50–80, number of medications, prior emergency visits, prior inpatient visits, and the truncated encounter index.
+Based on Table @ref(tab:or-table), patients aged 50–80 had about 20% lower odds of 30-day readmission compared with those ≤50 years (OR = 0.79, 95% CI: 0.61–0.98). This means that, holding all other variables constant, being in the 50–80 age group is associated with a meaningful reduction in readmission risk.
+Each additional medication slightly raised the odds of readmission (OR = 1.01, 95% CI: 1.00–1.02), and greater numbers of emergency visits (OR = 1.07, 95% CI: 1.01–1.13) and inpatient visits (OR = 1.18, 95% CI: 1.10–1.27) were associated with higher odds. 
+In contrast, the truncated encounter index showed a strong protective effect; each one-unit increase (up to the cap of 5) corresponded to roughly a 20% reduction in the odds of readmission (OR = 0.81, 95% CI: 0.73–0.88). Confidence intervals for the significant predictors did not cross 1, supporting their statistical significance.
+InsulinSteady has a p-value slightly above 0.05, suggesting a possible increase in readmission risk, although its 95% confidence interval crossed 1 and therefore the effect was not statistically significant.
+
+```{r vif-table, echo=FALSE}
+# Diagnostics for GLM
+# Multicollinearity (VIF)
+vif_raw <- car::vif(fit_glm)
+vif_tbl <- as.data.frame(vif_raw)
+colnames(vif_tbl) <- c("GVIF", "Df", "GVIF^(1/(2×Df))")
+
+vif_tbl <- vif_tbl %>%
+  dplyr::mutate(across(everything(), ~ round(.x, 3)))
+
+kable(
+  vif_tbl,
+  caption = "Variance Inflation Factors for Logistic GLM",
+  align = "c"
+)
+```
+Based on Table \@ref(tab:vif-table), all variance inflation factors were low (GVIF^(1/(2×Df)) ≈ 1–2), indicating no evidence of harmful multicollinearity among the predictors. Even the highest values, such asencounter_index_trunc (1.41) and number_inpatient (1.45), remain well below common concern thresholds (typically 2–5), suggesting that multicollinearity is minimal and unlikely to meaningfully bias the coefficient estimates.
+
+```{r cooks-figure, echo=FALSE, fig.cap="Cook's Distance for Influential Observations"}
+cooks <- cooks.distance(fit_glm)
+
+plot(
+  cooks,
+  main = "Cook's Distance for Influential Observations",
+  xlab = "Index",
+  ylab = "Cook's Distance"
+)
+
+abline(h = 0.04, col = "red", lty = 2)
+
+```
+Based on Figure \@ref(fig:cooks-figure), all Cook’s Distance values are extremely small and far below commonly used influence thresholds. This indicates that no single observation had a notable impact on the fitted GLM.
+
+```{r echo=FALSE}
+#Check for Overdispersion
+phi <- deviance(fit_glm) / df.residual(fit_glm)
+phi
+```
+The dispersion estimate was φ = 0.97, which is very close to 1, indicating no evidence of overdispersion in the logistic GLM.
+
+```{r devres-figure, echo=FALSE, fig.cap="Deviance Residuals vs Fitted Probabilities"}
+plot(
+  fitted(fit_glm),
+  residuals(fit_glm, type = "deviance"),
+  main = "Deviance Residuals vs Fitted Probabilities",
+  xlab = "Fitted probabilities",
+  ylab = "Deviance residuals",
+  pch = 20, col = "#00000030"
+)
+abline(h = 0, col = "red")
+```
+The residual plot (Figure \@ref(fig:devres-figure)) shows a symmetric, funnel-shaped pattern typical of logistic regression and no systematic structure, indicating that the model fits reasonably well.
+
+```{r pearson-figure, echo=FALSE, fig.cap="Pearson Residuals vs Fitted Probabilities"}
+plot(
+  fitted(fit_glm),
+  residuals(fit_glm, type = "pearson"),
+  main = "Pearson Residuals vs Fitted Probabilities",
+  xlab = "Fitted probabilities",
+  ylab = "Pearson residuals",
+  pch = 20, col = "#00000030"
+)
+abline(h = 0, col = "red")
+```
+The Pearson residuals (Figure \@ref(fig:pearson-figure)) show the expected curved pattern for logistic regression and no systematic structure, indicating acceptable model fit.
+
+```{r roc-figure, echo=FALSE, message=FALSE, fig.cap="ROC Curve for Logistic GLM"}
+# Goodness-of-fit
+y_glm  <- fit_glm$y
+phat   <- fitted(fit_glm)
+hoslem.test(y_glm, phat, g = 10)
+
+# ROC Curve
+roc_obj <- roc(y_glm, phat)
+roc_obj
+auc(roc_obj)
+
+plot(
+  roc_obj,
+  main = "ROC Curve for Logistic GLM",   # no manual numbering here
+  col = "blue"
+)
+
+```
+The Hosmer–Lemeshow test gave a p-value of 0.66, indicates no evidence of poor calibration. The predicted and observed readmission rates are reasonably aligned. 
+However, the AUC was 0.586, so the model’s ability to distinguish between readmitted and non-readmitted patients is only slightly better than chance.
+
+```{r traj-figure, echo=FALSE, fig.cap="Trajectory of Readmission Rates Across Encounters, Stratified by Insulin Regimen"}
+traj <- dat %>%
+  dplyr::group_by(encounter_index_trunc, insulin) %>%
+  dplyr::summarize(prop = mean(readmit30), .groups = "drop")
+
+ggplot(traj, aes(x = encounter_index_trunc, y = prop, color = insulin)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Trajectory of Readmission Rates Across Encounters, Stratified by Insulin Regimen",
+    x = "Encounter Index",
+    y = "Readmission Proportion"
+  )
+
+```
+The trajectory plot (Figure \@ref(fig:traj-figure))shows that the insulin groups follow clearly non-parallel paths across encounters, suggesting that the encounter effect is not the same for all groups.
+
+
+```{r echo=FALSE}
+#Interaction Check
+##Fit a GLM with interaction: encounter_index * insulin
+fit_interaction <- glm(
+  readmit30 ~ insulin * encounter_index_trunc + age + gender + race +
+    num_medications + time_in_hospital +
+    number_emergency + number_inpatient + admission_type_id,
+  family=binomial,
+  data=dat
+)
+
+summary(fit_interaction)
+```
+Including the insulin × encounter_index_trunc interaction improved model fit (AIC decreased from 4026 to 4014), and several interaction terms were statistically significant. InsulinSteady×Encounter_index (p = 0.003) and InsulinUp×Encounter_index (p < 0.0001) showed strong evidence that the effect of encounter index differs by insulin group. This indicates that the association between encounter index and readmission is not constant across insulin categories.
+
+The trajectory plot result is consistent with the significant interaction terms in the GLM. Together, they suggest that the slope linking encounter index to readmission probability varies by insulin status. This provides justification for modeling strategies that allow group-specific slopes or correlated repeated measures, rather than relying on a single common slope for all insulin groups.
+
+
+```{r lag1-figure, echo=FALSE, fig.cap="Lag-1 Pearson Residual Plot"}
+#Independence Diagnostics
+
+##Lag-1 Pearson residual plot
+
+#Extract Pearson residuals
+pearson_resid <- residuals(fit_glm, type = "pearson")
+pearson_resid <- pearson_resid[!is.na(pearson_resid)]
+
+#Create lag-1 residual within each patient
+lag1_resid <- dplyr::lag(pearson_resid, 1)
+
+lag_df <- data.frame(
+  r_t = pearson_resid[-1],
+  r_t_minus1 = lag1_resid[-1]
+)
+
+#Lag-1 residual plot
+ggplot(lag_df, aes(x = r_t_minus1, y = r_t)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(
+    title = "Lag-1 Pearson Residual Plot",
+    x = "Pearson Residual (t-1)",
+    y = "Pearson Residual (t)"
+  ) +
+  theme_minimal()
+```
+The lag-1 Pearson residual plot (Figure \@ref(fig:lag1-figure)) shows clear clustering and diagonal patterns, indicating positive autocorrelation between residuals from consecutive encounters. This violates the independence assumption of the GLM and suggests that within-patient correlation is present, making methods such as GEE or GLMM more appropriate.
+
+```{r rse-table, echo=FALSE}
+#Robust SE Comparison (Sandwich)
+
+# Model-based summary
+model_sum <- summary(fit_glm)$coef
+
+# Robust (clustered) standard errors
+vcov_cl  <- vcovCL(fit_glm, cluster = ~ patient_nbr)
+robust   <- coeftest(fit_glm, vcov = vcov_cl)
+
+# Build comparison table
+comp_table <- data.frame(
+  Term       = rownames(model_sum),
+  Estimate   = model_sum[, "Estimate"],
+  SE_Model   = model_sum[, "Std. Error"],
+  p_Model    = model_sum[, "Pr(>|z|)"],
+  SE_Robust  = robust[, "Std. Error"],
+  p_Robust   = robust[, "Pr(>|z|)"]
+)
+
+comp_table <- comp_table %>%
+  mutate(across(-Term, ~ round(.x, 4)))
+
+# Display table
+rownames(comp_table) <- NULL
+
+kable(
+  comp_table,
+  caption = "Model-Based vs. Cluster-Robust Standard Errors",
+  align = "c"
+) %>%
+  kable_styling(full_width = FALSE)
+```
+Cluster-robust standard errors were computed to adjust for within-patient correlation across repeated encounters. While coefficient estimates were unchanged, several standard errors increased. Notably, the age 50–80 category was no longer statistically significant under the robust SEs (p = 0.066, from Table \@ref(tab:rse-table)), indicating that the naïve GLM slightly underestimated uncertainty. The main conclusions for number of medications, emergency visits, inpatient visits, and the encounter index remained robust.
+
 
 ### GEE
 
