@@ -8,6 +8,27 @@ editor: visual
 
 
 ### GLM
+GLM Method:
+
+We modeled the probability of 30-day readmission using a logistic generalized linear model (GLM) with a logit link. The model takes the form:$log(\frac{P(readmit30=1)}{1-P(readmit30=1)}) = \beta_0 +\beta_1(insulin) + \beta_2(age) + ... + \beta_10(encounter  index)$ . Covariates included insulin prescription status, demographic variables (age, gender, race), encounter-level severity indicators (number of medications, time in hospital, admission type), prior healthcare utilization (emergency and inpatient visits), and a truncated encounter index reflecting recent encounter history. A marginal GLM was used as an initial approach because its coefficients yield population-average interpretations and provide a baseline for evaluating whether correlated-data models are necessary. Wald z-tests were used for inference on regression coefficients.
+
+To evaluate the contribution of encounter history, we fit two versions of the GLM: one including the truncated encounter index and one excluding it. Comparing these models allowed us to assess whether encounter index added explanatory value and should be retained before proceeding to more advanced longitudinal modeling frameworks.
+
+Regression coefficients were exponentiated to obtain odds ratios (ORs), and profile likelihood confidence intervals were computed using confint(). This allowed effects to be interpreted as multiplicative changes in the odds of readmission while maintaining likelihood-based inference.
+
+Generalized variance inflation factors (GVIFs) were calculated to evaluate multicollinearity, particularly for categorical predictors with multiple degrees of freedom. This ensured stable coefficient estimation and interpretability.
+
+We performed residual diagnostics, influence diagnostics, and goodness-of-fit assessments to evaluate whether the GLM adequately captured the relationship between predictors and 30-day readmission. Deviance and Pearson residuals were plotted against fitted probabilities to assess functional form, detect outlying patterns, and evaluate the appropriateness of the logit link. Overdispersion was examined by comparing the residual deviance to its degrees of freedom. Influence diagnostics were conducted using Cook’s distance to identify observations with disproportionate leverage on coefficient estimates. Model calibration was assessed using the Hosmer–Lemeshow test, and predictive discrimination was evaluated using the receiver operating characteristic (ROC) curve and its corresponding area under the curve (AUC). Together, these diagnostics provided a comprehensive assessment of model fit and predictive performance.
+
+Because encounters were nested within patients, the independence assumption of a standard GLM may be violated. To explore potential within-patient dependence, we first generated encounter-level trajectory plots, which display how observed readmission proportions vary across encounter index and insulin categories. These plots provide an initial visual assessment of temporal patterns and possible effect modification over repeated encounters.
+
+Next, we computed lag-1 Pearson residuals, plotting residuals at encounter t against residuals from encounter t−1. This diagnostic examines serial correlation among consecutive encounters; systematic dependence or diagonal structure in this plot would indicate violation of the independence assumption.
+
+To evaluate whether the association between insulin status and readmission varied across encounter history, we fit a logistic GLM including insulin × encounter_index_trunc interaction terms. This model tested whether the effect of insulin depended on how many encounters a patient had previously accumulated. Model selection using AIC guided whether the interaction terms improved model specification.
+
+Finally, to account for potential correlation directly in the inferential framework, we computed cluster-robust (sandwich) standard errors at the patient level. These robust SEs adjust for within-patient clustering while leaving coefficient estimates unchanged, allowing valid inference even when observations are correlated. Comparing model-based and cluster-robust standard errors helped assess the extent to which within-patient dependence affected uncertainty estimates and whether a marginal GLM remained adequate or if repeated-measures models (GEE or GLMM) might be required.
+
+GLM Result:
 
 ```{r include=FALSE}
 suppressPackageStartupMessages({
