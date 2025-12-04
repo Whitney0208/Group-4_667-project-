@@ -72,28 +72,21 @@ The project files are organized as follows:
 
 ## 🧮 Methodology
 
-We employed a rigorous comparative modeling strategy to handle correlated binary outcomes:
+We used a comparative modeling strategy to analyze correlated binary outcomes:
 
-```mermaid
-graph TD
-    A[Raw Data] --> B(Data Cleaning & Cohort Construction)
-    B --> C{Modeling Strategy}
-    
-    C --> D[Marginal Logistic GLM]
-    D --> D1[Independence Working Model]
-    D --> D2[Robust Sandwich SEs]
-    
-    C --> E[GLMMs]
-    E --> E1[Random Intercept]
-    E --> E2[Random Slope (Final Model)]
-    
-    D2 --> F[Compare & Interpret]
-    E2 --> F
-    F --> G[Final Inference]
-```
+1. **Marginal Logistic GLM**
+   - Models encounter-level probability of 30‑day readmission with a logit link.
+   - Includes truncated encounter index (time) and an Insulin × Time interaction.
+   - Uses cluster‑robust (sandwich) standard errors at the patient level to account for within‑patient correlation.
 
-1.  **Marginal Approach:** Modeled population-averaged effects using GEE-style robust standard errors.
-2.  **Mixed-Effects Approach:** Modeled subject-specific trajectories, testing for random slopes to capture individual variation in recovery rates.
+2. **Generalized Linear Mixed Models (GLMMs)**
+   - Random‑intercept GLMMs with and without the Insulin × Time interaction.
+   - Random‑slope GLMM allowing both baseline risk and time trends to vary by patient.
+   - Model comparison via AIC and likelihood‑ratio tests shows the random‑slope model provides the best fit.
+
+3. **Conditional vs. Marginal Effects**
+   - Applies Zeger’s attenuation method to approximate population‑averaged effects from the subject‑specific GLMM.
+   - Confirms that conditional and approximate marginal odds ratios are very similar, supporting robustness of the conclusions.
 
 -----
 
