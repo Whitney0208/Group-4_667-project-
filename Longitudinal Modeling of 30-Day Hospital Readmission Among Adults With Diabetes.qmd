@@ -457,6 +457,172 @@ Conceptually, the GEE model occupies a middle ground between the independence GL
 
 To connect the subject-specific GLMM estimates back to a population-averaged interpretation analogous to GEE, we applied Zeger’s attenuation method to approximate marginal effects from the random-slope model. The close agreement between conditional and approximate marginal odds ratios suggests that, in this data set, the choice between a GEE-type marginal model and a mixed-effects model is unlikely to materially alter substantive conclusions. We therefore view the GLMM and the marginal GLM with robust standard errors as complementary perspectives on the same underlying associations, with the former providing richer insight into individual trajectories.
 
+```{r warning=FALSE}
+library(tidyverse)
+library(geepack)    # geeglm
+library(broom)
+# library(pscl)       # for pseudo R2 if needed
+library(emmeans)    # marginal predictions (works with many models)
+library(dplyr)
+library(ggplot2)
+library(MESS)
+library(car)
+library(ggeffects)
+
+```
+
+```{r warning=FALSE}
+setwd("C:/Users/a1388/Desktop/3rd Semester/bios667/final")
+df <- read_csv("cleaned_diabetes_longitudinal_Nov29.csv")
+
+set.seed(667)
+```
+
+
+```{r}
+# 0. 简单检查 & factor 转换
+# delete nan
+df <- df %>%
+  filter(race != "NA's" & age != '(Other)')
+
+glimpse(df)
+df <- df %>%
+  mutate(
+    patient_nbr = as.factor(patient_nbr),
+    readmit30 = as.integer(readmit30), # 0/1
+    encounter_index_trunc = as.integer(encounter_index),
+    age = factor(age, ordered = FALSE),
+    gender = factor(gender),
+    race = factor(race),
+    insulin = factor(insulin),
+    admission_type_id = factor(admission_type_id)
+  )
+
+
+df$patient_nbr <- as.numeric(df$patient_nbr)
+
+df$insulin <- relevel(factor(df$insulin), ref = "No")
+df$age <- factor(df$age)
+df$age <- relevel(df$age, ref = "<=50")
+df$gender <- factor(df$gender)
+df$race <- factor(df$race)
+df$admission_type_id <- factor(df$admission_type_id)
+
+# Collapse admission type
+df$admission_type_id2 <- df$admission_type_id
+df$admission_type_id2 <- ifelse(df$admission_type_id %in% c("5","6","8"),
+                                 "Other",
+                                 as.character(df$admission_type_id))
+df$admission_type_id2 <- factor(df$admission_type_id2)
+
+# Frequency table: how many patients have 2, 3, 4… encounters
+enc_per_patient <- table(df$patient_nbr)
+table(enc_per_patient)
+
+#Truncate encounter_index
+df$encounter_index_trunc <- pmin(df$encounter_index, 5)
+table(df$encounter_index_trunc)
+
+lapply(df[, sapply(df, is.factor)], levels)
+
+```
+
+```{r}
+# Collapse admission type
+df$admission_type_id2 <- df$admission_type_id
+df$admission_type_id2 <- ifelse(df$admission_type_id %in% c("5","6","8"),
+                                 "Other",
+                                 as.character(df$admission_type_id))
+df$admission_type_id2 <- factor(df$admission_type_id2)
+#Truncate encounter_index
+df$encounter_index_trunc <- pmin(df$encounter_index, 5)
+table(df$encounter_index_trunc)
+```
+
+
+```{r}
+df <- droplevels(df)
+
+summary(df)
+```
+
+#Method: GEE
+We used GEE with a logit link to model the marginal association between patient and encounter level covariates and 30-day readmission. Patient ID was specified as numeric variable to account for within-patient correlation.
+An exchangeable working correlation structure was prespecified; we also fitted independence and AR(1) structures and compared models using QIC.
+## assumption  
+GEE relies on several key assumptions.
+First, the marginal mean model must be correctly specified; that is, the chosen link function and covariate structure should adequately describe the marginal relationship between predictors and the binary readmission outcome.
+Second, GEE requires a working correlation structure for repeated measures within each patient. While misspecification does not bias the regression coefficients, it may reduce efficiency.
+Third, GEE assumes that any missing data follow a Missing Completely at Random (MCAR) or Missing at Random (MAR) mechanism so that the estimating equations remain unbiased. All missing data are deleted for better evaluation in the GEE section.
+Fourth, a sufficiently large number of patient clusters is needed to ensure reliable sandwich variance estimation. 
+Finally, observations within the same patient are assumed to be correlated, whereas different patients are independent, which aligns with the structure of our longitudinal diabetes dataset.
+#modeling
+```{r}
+# 3
+gee_base1 <- geeglm(
+  readmit30 ~ encounter_index_trunc + age + gender + race + insulin + num_medications +
+    time_in_hospital + number_emergency + number_inpatient + admission_type_id2,
+  id = patient_nbr,
+  waves = encounter_index_trunc,
+  data = df,
+  family = binomial(link = "logit"),
+  corstr = "exchangeable"
+)
+
+summary(gee_base1)
+geepack::QIC(gee_base1)
+
+```
+
+```{r}
+gee_base2 <- geeglm(
+  readmit30 ~ encounter_index_trunc + age + gender + race + insulin + num_medications +
+    time_in_hospital + number_emergency + number_inpatient + admission_type_id2,
+  id = patient_nbr,
+  waves = encounter_index_trunc,
+  data = df,
+  family = binomial(link = "logit"),
+  corstr = "independence"
+)
+
+summary(gee_base2)
+geepack::QIC(gee_base2)
+```
+
+```{r}
+
+final_gee <- gee_base2  # 例如选择 gee_exch
+coefs <- broom::tidy(final_gee, conf.int = TRUE, exponentiate = TRUE) # exponentiate -> ORs
+coefs %>% filter(term != "(Intercept)")
+```
+
+
+```{r}
+pred <- ggpredict(final_gee, terms = c("encounter_index_trunc", "admission_type_id2"))
+plot(pred, show_ci = FALSE)
+
+```
+
+```{r}
+# 7. 残差诊断（Pearson residuals）
+pearson_resid <- residuals(final_gee, type = "pearson")
+df$resid_pearson <- pearson_resid
+# 看极端值
+df %>% arrange(desc(abs(resid_pearson))) %>% slice_head(n = 10)
+```
+
+```{r}
+glm_for_vif <- glm(readmit30 ~ encounter_index_trunc + age + gender + race + insulin + num_medications +
+    time_in_hospital + number_emergency + number_inpatient + admission_type_id2,
+                   data = df, family = binomial())
+vif(glm_for_vif)
+```
+
+
+
+
+
+
 ### GLMM
 
 ```{r glmm-libs, echo=FALSE, message=FALSE, warning=FALSE}
@@ -874,3 +1040,4 @@ Despite these limitations, our study leverages a large, real-world cohort with r
 ### Conclusion
 
 In summary, we provide a longitudinal characterization of 30-day readmission risk among patients with diabetes that integrates marginal and subject-specific modeling approaches. Readmission risk generally declines with repeated encounters, but this improvement is substantially attenuated in patients undergoing insulin escalation, who remain at persistently elevated risk even after accounting for prior utilization and other covariates. By demonstrating that conclusions are robust across GLM with robust standard errors and random-slope GLMMs, while highlighting clinically meaningful heterogeneity in individual trajectories, our work underscores the need for targeted, patient-centered strategies focused on insulin-intensified and high-utilization patients to effectively reduce preventable readmissions.
+
