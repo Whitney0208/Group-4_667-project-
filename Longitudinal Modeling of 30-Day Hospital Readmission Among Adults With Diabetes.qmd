@@ -1,0 +1,876 @@
+---
+title: "Longitudinal Modeling of 30-Day Hospital Readmission Among Adults With Diabetes"
+author:
+  - name: "Zhangziyan Jiang"
+  - name: "Wanbing Wang"
+  - name: "Xiaochen Zhou"
+  - name: "Muyao Tang"
+  - name: "Danni Liu"
+format: html
+editor: visual
+---
+
+### Introduction
+
+Hospital readmissions among adults with diabetes impose a substantial burden on patients and health systems, and 30-day readmission has become a widely used quality metric. Prior work has identified demographic factors, comorbidity burden, and prior healthcare utilization as important correlates of early readmission, but far less is known about how risk evolves over repeated encounters for the same individual and whether longitudinal trajectories differ by treatment patterns such as insulin use or intensification. Understanding these dynamics is essential for designing targeted interventions that prioritize patients who remain persistently high-risk despite ongoing contact with the healthcare system.
+
+Leveraging an electronic health record–derived cohort of diabetic inpatients with multiple hospital encounters, we examined the association between insulin regimen, encounter history, and 30-day readmission. We first used a marginal logistic GLM to characterize population-averaged associations and evaluate whether a simple independence model provides an adequate description of the data. We then assessed within-patient correlation and formally compared this marginal approach with subject-specific generalized linear mixed models that incorporate random intercepts and random slopes for encounter index.
+
+Our primary aims were threefold: (i) to quantify how 30-day readmission risk changes with successive encounters, (ii) to determine whether these trajectories differ across insulin treatment groups, particularly patients undergoing insulin dose escalation, and (iii) to evaluate the extent to which accounting for within-patient correlation changes substantive conclusions. By integrating model diagnostics, robust standard errors, and mixed-effects modeling, we sought to provide a rigorous and clinically interpretable description of longitudinal readmission risk in this high-risk population.
+
+### Data
+
+```{r data-summary, include=FALSE}
+library(dplyr)
+
+data_raw <- read.csv("cleaned_diabetes_longitudinal_Nov29.csv")
+
+n_patients   <- dplyr::n_distinct(data_raw$patient_nbr)
+n_encounters <- nrow(data_raw)
+overall_rate <- mean(data_raw$readmit30)
+overall_rate_pct <- round(100 * overall_rate, 1)
+
+insulin_summary <- data_raw %>%
+  dplyr::group_by(insulin) %>%
+  dplyr::summarise(
+    n_encounters = dplyr::n(),
+    n_patients   = dplyr::n_distinct(patient_nbr),
+    readmit_rate = mean(readmit30),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    readmit_rate_pct = sprintf("%.1f%%", 100 * readmit_rate)
+  )
+```
+
+We analyzed `r n_patients` unique patients contributing `r n_encounters` inpatient encounters from an existing de-identified administrative database of adults with diabetes. The overall 30-day readmission rate was `r overall_rate_pct`%, indicating that early readmission is a frequent outcome in this population with repeated hospitalizations. Across insulin regimens, the numbers of unique patients ever observed on each regimen, together with the corresponding encounter counts and 30-day readmission proportions, are summarized in the table above. Because some individuals transition between regimens over time, the patient counts by regimen sum to more than the overall number of unique patients.
+
+```{r insulin-table, echo=FALSE, message=FALSE, warning=FALSE}
+library(knitr)
+library(kableExtra)
+
+kable(
+  insulin_summary[, c("insulin", "n_patients", "n_encounters", "readmit_rate_pct")],
+  col.names = c("Insulin regimen", "Patients (per regimen)", "Encounters", "30-day readmission"),
+  caption = "Sample size and 30-day readmission by insulin regimen",
+  align = "c"
+) %>%
+  kable_styling(full_width = FALSE)
+```
+
+### GLM
+
+GLM Method:
+
+Let $i=1,\dots,N$ index patients and $j=1,\dots,n_i$ index encounters within patient $i$. For each encounter we observe a binary outcome $$
+Y_{ij} =
+\begin{cases}
+1, & \text{if patient } i \text{ is readmitted within 30 days after encounter } j,\\
+0, & \text{otherwise,}
+\end{cases}
+$$ and a vector of covariates $\mathbf{X}_{ij}$ including insulin regimen, demographics, encounter-level severity indicators, and prior utilization measures. As an initial marginal analysis, we modeled the encounter-level readmission probability using a logistic generalized linear model (GLM) with a logit link, $$
+\text{logit}\{\Pr(Y_{ij}=1)\}
+= \beta_0
+  + \boldsymbol{\beta}_{\text{Ins}}^\top \mathbf{Z}_{\text{Ins},ij}
+  + \boldsymbol{\beta}_{\text{Demo}}^\top \mathbf{Z}_{\text{Demo},ij}
+  + \boldsymbol{\beta}_{\text{Util}}^\top \mathbf{Z}_{\text{Util},ij}
+  + \beta_{\text{Enc}}\,\text{Time}_{ij},
+$$ where $\mathbf{Z}_{\text{Ins},ij}$ encodes insulin regimen (No, Steady, Up, Down), $\mathbf{Z}_{\text{Demo},ij}$ collects age group, gender, and race, $\mathbf{Z}_{\text{Util},ij}$ contains encounter-level severity and prior utilization measures (number of medications, length of stay, numbers of prior emergency and inpatient visits, admission type), and $\text{Time}_{ij}$ denotes the truncated encounter index (capped at 5). This model assumes that, conditional on $\mathbf{X}_{ij}$, the $\{Y_{ij}\}$ are independent across encounters and across patients. Regression coefficients were exponentiated to obtain odds ratios (ORs), so that $\exp(\beta_k)$ is interpreted as the multiplicative change in the odds of readmission associated with a one-unit increase in the corresponding covariate, holding other variables fixed. Wald $z$-tests were used for inference on regression coefficients.
+
+With respect to covariate selection, we adopted a hypothesis-driven strategy rather than data-driven stepwise procedures. Demographic variables (age group, gender, race) and clinical severity or utilization indicators (admission type, length of stay, numbers of prior emergency and inpatient visits, number of medications) were retained regardless of individual $p$-values in order to control for potential confounding and to preserve comparability with prior readmission studies. Time and its interaction with insulin regimen were then added explicitly to address our primary scientific question about longitudinal trajectories under different treatment patterns.
+
+To evaluate the contribution of encounter history, we fit two versions of the GLM: one including the truncated encounter index and one excluding it. Comparing these models allowed us to assess whether encounter index added explanatory value and should be retained before proceeding to more advanced longitudinal modeling frameworks.
+
+Regression coefficients were exponentiated to obtain odds ratios (ORs), and profile likelihood confidence intervals were computed using confint(). This allowed effects to be interpreted as multiplicative changes in the odds of readmission while maintaining likelihood-based inference.
+
+Generalized variance inflation factors (GVIFs) were calculated to evaluate multicollinearity, particularly for categorical predictors with multiple degrees of freedom. This ensured stable coefficient estimation and interpretability.
+
+We performed residual diagnostics, influence diagnostics, and goodness-of-fit assessments to evaluate whether the GLM adequately captured the relationship between predictors and 30-day readmission. Deviance and Pearson residuals were plotted against fitted probabilities to assess functional form, detect outlying patterns, and evaluate the appropriateness of the logit link. Overdispersion was examined by comparing the residual deviance to its degrees of freedom. Influence diagnostics were conducted using Cook’s distance to identify observations with disproportionate leverage on coefficient estimates. Model calibration was assessed using the Hosmer–Lemeshow test, and predictive discrimination was evaluated using the receiver operating characteristic (ROC) curve and its corresponding area under the curve (AUC). Together, these diagnostics provided a comprehensive assessment of model fit and predictive performance.
+
+Because encounters were nested within patients, the independence assumption of a standard GLM may be violated. To explore potential within-patient dependence, we first generated encounter-level trajectory plots, which display how observed readmission proportions vary across encounter index and insulin categories. These plots provide an initial visual assessment of temporal patterns and possible effect modification over repeated encounters.
+
+Next, we computed lag-1 Pearson residuals, plotting residuals at encounter t against residuals from encounter t−1. This diagnostic examines serial correlation among consecutive encounters; systematic dependence or diagonal structure in this plot would indicate violation of the independence assumption.
+
+To evaluate whether the association between insulin status and readmission varied across encounter history, we fit a logistic GLM including insulin × encounter_index_trunc interaction terms. This model tested whether the effect of insulin depended on how many encounters a patient had previously accumulated. Model selection using AIC guided whether the interaction terms improved model specification. Conceptually, one could also entertain richer mean structures that allow for non-linear time effects and additional interactions (e.g., quadratic terms in $\text{Time}_{ij}$, and interaction terms between insulin regimen and prior utilization), but given the modest number of encounters per patient and our focus on a single, clinically interpretable interaction, we restricted our implemented analyses to the linear-time specification with an insulin-by-time interaction.
+
+Formally, the interaction model can be written as $$
+\text{logit}\{\Pr(Y_{ij}=1)\}
+= \beta_0
+  + \boldsymbol{\beta}_{\text{Ins}}^\top \mathbf{Z}_{\text{Ins},ij}
+  + \beta_{\text{Time}}\,\text{Time}_{ij}
+  + \boldsymbol{\beta}_{\text{Int}}^\top\big(\mathbf{Z}_{\text{Ins},ij} \times \text{Time}_{ij}\big)
+  + \boldsymbol{\gamma}^\top \mathbf{W}_{ij},
+$$ where $\mathbf{W}_{ij}$ denotes the remaining covariates (demographics, admission type, prior utilization, and encounter-level severity). In this parameterization, $\beta_{\text{Time}}$ captures the time trend in the reference insulin group (No insulin), while each component of $\boldsymbol{\beta}_{\text{Int}}$ quantifies how the time trend is modified in the corresponding insulin category. Thus $\exp\{\beta_{\text{Time}} + \beta_{\text{Int},k}\}$ gives the multiplicative change in the odds of readmission per one-unit increase in encounter index for insulin group $k$, relative to the baseline group.
+
+Finally, to account for potential correlation directly in the inferential framework, we computed cluster-robust (sandwich) standard errors at the patient level. These robust SEs adjust for within-patient clustering while leaving coefficient estimates unchanged, allowing valid inference even when observations are correlated. Comparing model-based and cluster-robust standard errors helped assess the extent to which within-patient dependence affected uncertainty estimates and whether a marginal GLM remained adequate or if repeated-measures models (GEE or GLMM) might be required.
+
+GLM Result:
+
+```{r include=FALSE}
+suppressPackageStartupMessages({
+library(broom)
+library(dplyr)
+library(car)
+library(ResourceSelection)
+library(pROC)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(sandwich)
+library(lmtest)
+})
+```
+
+```{r include=FALSE}
+dat <- read.csv("cleaned_diabetes_longitudinal_Nov29.csv")
+dat$insulin <- relevel(factor(dat$insulin), ref = "No")
+dat$age <- factor(dat$age)
+dat$gender <- factor(dat$gender)
+dat$race <- factor(dat$race)
+dat$admission_type_id <- factor(dat$admission_type_id)
+
+# Frequency table: how many patients have 2, 3, 4… encounters
+enc_per_patient <- table(dat$patient_nbr)
+table(enc_per_patient)
+
+#Truncate encounter_index
+dat$encounter_index_trunc <- pmin(dat$encounter_index, 5)
+table(dat$encounter_index_trunc)
+
+lapply(dat[, sapply(dat, is.factor)], levels)
+```
+
+```{r include=FALSE}
+# GLM with encounter_index_trunc
+fit_glm <- glm(
+  readmit30 ~ insulin + age + gender + race +
+    num_medications + time_in_hospital +
+    number_emergency + number_inpatient +
+    admission_type_id + encounter_index_trunc,
+  family = binomial(link = "logit"),
+  data = dat
+)
+
+# GLM without encounter_index_trunc
+fit_glm_2 <- glm(
+  readmit30 ~ insulin + age + gender + race +
+    num_medications + time_in_hospital +
+    number_emergency + number_inpatient +
+    admission_type_id,
+  family = binomial(link = "logit"),
+  data = dat
+)
+```
+
+Here two logistic GLMs were fitted. One includes a truncated encounter index(capped at 5), and one without it. Including encounter_trunc improved model fit (AIC 4026 vs 4047) and reduced residual deviance (3992.2 vs 4015). The truncated index was highly significant(p\<0.001).
+
+```{r or-table, echo=FALSE, message=FALSE}
+OR_table <- exp(cbind(OR = coef(fit_glm), confint(fit_glm)))
+pvals <- summary(fit_glm)$coef[, 4]
+
+final_table <- cbind(OR_table, p.value = pvals)
+final_table <- as.data.frame(final_table)
+final_table$Term <- rownames(final_table)
+final_table <- final_table %>%
+  dplyr::select(Term, dplyr::everything()) %>%
+  dplyr::mutate(
+    Term = dplyr::recode(
+      Term,
+      "(Intercept)"              = "Intercept",
+      "insulinDown"              = "Insulin: Down vs No",
+      "insulinSteady"            = "Insulin: Steady vs No",
+      "insulinUp"                = "Insulin: Up vs No",
+      "age>=80"                  = "Age: ≥80 vs ≤50",
+      "age50-80"                 = "Age: 50–80 vs ≤50",
+      "genderMale"               = "Gender: Male vs Female",
+      "raceCaucasian"            = "Race: Caucasian vs African American",
+      "raceOther"                = "Race: Other vs African American",
+      "num_medications"          = "Number of medications",
+      "time_in_hospital"         = "Length of stay (days)",
+      "number_emergency"         = "Number of prior emergency visits",
+      "number_inpatient"         = "Number of prior inpatient visits",
+      "admission_type_id2"       = "Admission type: Urgent vs Emergency",
+      "admission_type_id3"       = "Admission type: Elective vs Emergency",
+      "admission_type_id5"       = "Admission type: Other vs Emergency",
+      "encounter_index_trunc"    = "Truncated encounter index"
+    )
+  )
+
+kable(
+  final_table,
+  caption = "Odds Ratios (OR) with 95% Confidence Intervals for Logistic GLM",
+  digits = 4
+) 
+```
+
+In the full GLM model, several predictors were significantly associated with 30-day readmission, including age 50–80, number of medications, prior emergency visits, prior inpatient visits, and the truncated encounter index. Based on the odds ratio table, patients aged 50–80 had about 20% lower odds of 30-day readmission compared with those ≤50 years (OR = 0.79, 95% CI: 0.61–0.98). This means that, holding all other variables constant, being in the 50–80 age group is associated with a meaningful reduction in readmission risk. Each additional medication slightly raised the odds of readmission (OR = 1.01, 95% CI: 1.00–1.02), and greater numbers of emergency visits (OR = 1.07, 95% CI: 1.01–1.13) and inpatient visits (OR = 1.18, 95% CI: 1.10–1.27) were associated with higher odds. In contrast, the truncated encounter index showed a strong protective effect; each one-unit increase (up to the cap of 5) corresponded to roughly a 20% reduction in the odds of readmission (OR = 0.81, 95% CI: 0.73–0.88). Confidence intervals for the significant predictors did not cross 1, supporting their statistical significance. InsulinSteady has a p-value slightly above 0.05, suggesting a possible increase in readmission risk, although its 95% confidence interval crossed 1 and therefore the effect was not statistically significant.
+
+```{r vif-table, echo=FALSE}
+# Diagnostics for GLM
+# Multicollinearity (VIF)
+vif_raw <- car::vif(fit_glm)
+vif_tbl <- as.data.frame(vif_raw)
+colnames(vif_tbl) <- c("GVIF", "Df", "GVIF^(1/(2×Df))")
+
+vif_tbl <- vif_tbl %>%
+  dplyr::mutate(across(everything(), ~ round(.x, 3)))
+
+kable(
+  vif_tbl,
+  caption = "Variance Inflation Factors for Logistic GLM",
+  align = "c"
+)
+```
+
+Based on this variance inflation factor table, all variance inflation factors were low (GVIF\^(1/(2×Df)) ≈ 1–2), indicating no evidence of harmful multicollinearity among the predictors. Even the highest values—for the truncated encounter index (1.41) and the number of prior inpatient visits (1.45)—remain well below common concern thresholds (typically 2–5), suggesting that multicollinearity is minimal and unlikely to meaningfully bias the coefficient estimates.
+
+```{r cooks-figure, echo=FALSE, fig.cap="Cook's Distance for Influential Observations"}
+cooks <- cooks.distance(fit_glm)
+
+plot(
+  cooks,
+  main = "Cook's Distance for Influential Observations",
+  xlab = "Index",
+  ylab = "Cook's Distance"
+)
+
+abline(h = 0.04, col = "red", lty = 2)
+```
+
+The Cook's distance plot shows that all influence values are extremely small and far below commonly used thresholds. This indicates that no single observation had a notable impact on the fitted GLM.
+
+```{r glm-dispersion, include=FALSE}
+# Check for overdispersion (result reported in text, no printed output)
+phi <- deviance(fit_glm) / df.residual(fit_glm)
+```
+
+The dispersion estimate was φ = 0.97, which is very close to 1, indicating no evidence of overdispersion in the logistic GLM.
+
+```{r devres-figure, echo=FALSE, fig.cap="Deviance Residuals vs Fitted Probabilities"}
+plot(
+  fitted(fit_glm),
+  residuals(fit_glm, type = "deviance"),
+  main = "Deviance Residuals vs Fitted Probabilities",
+  xlab = "Fitted probabilities",
+  ylab = "Deviance residuals",
+  pch = 20, col = "#00000030"
+)
+abline(h = 0, col = "red")
+```
+
+The residual plot of deviance residuals against fitted values shows a symmetric, funnel-shaped pattern typical of logistic regression and no systematic structure, indicating that the model fits reasonably well.
+
+```{r pearson-figure, echo=FALSE, fig.cap="Pearson Residuals vs Fitted Probabilities"}
+plot(
+  fitted(fit_glm),
+  residuals(fit_glm, type = "pearson"),
+  main = "Pearson Residuals vs Fitted Probabilities",
+  xlab = "Fitted probabilities",
+  ylab = "Pearson residuals",
+  pch = 20, col = "#00000030"
+)
+abline(h = 0, col = "red")
+```
+
+The Pearson residuals against fitted values show the expected curved pattern for logistic regression and no systematic structure, indicating acceptable model fit.
+
+```{r roc-figure, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="ROC Curve for Logistic GLM"}
+# Goodness-of-fit
+y_glm  <- fit_glm$y
+phat   <- fitted(fit_glm)
+invisible(hoslem.test(y_glm, phat, g = 10))
+
+# ROC Curve
+roc_obj <- roc(y_glm, phat)
+auc_val <- auc(roc_obj)
+
+plot(
+  roc_obj,
+  main = "ROC Curve for Logistic GLM",
+  col = "blue",
+  lwd = 2
+)
+abline(a = 0, b = 1, lty = 2, col = "grey70")
+text(
+  x = 0.65, y = 0.2,
+  labels = paste0("AUC = ", sprintf("%.3f", as.numeric(auc_val))),
+  cex = 0.8
+)
+
+```
+
+The Hosmer–Lemeshow test gave a p-value of 0.66, indicates no evidence of poor calibration. The predicted and observed readmission rates are reasonably aligned. However, the AUC was 0.586, so the model’s ability to distinguish between readmitted and non-readmitted patients is only slightly better than chance.
+
+```{r traj-figure, echo=FALSE, fig.cap="Trajectory of Readmission Rates Across Encounters, Stratified by Insulin Regimen"}
+traj <- dat %>%
+  dplyr::group_by(encounter_index_trunc, insulin) %>%
+  dplyr::summarize(prop = mean(readmit30), .groups = "drop")
+
+ggplot(traj, aes(x = encounter_index_trunc, y = prop, color = insulin)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Trajectory of Readmission Rates Across Encounters, Stratified by Insulin Regimen",
+    x = "Encounter Index",
+    y = "Readmission Proportion"
+  )
+
+```
+
+The trajectory plot of observed readmission proportions across encounter index and insulin regimen shows clearly non-parallel paths, suggesting that the encounter effect is not the same for all groups.
+
+```{r echo=FALSE, results='hide'}
+#Interaction Check
+##Fit a GLM with interaction: encounter_index * insulin
+fit_interaction <- glm(
+  readmit30 ~ insulin * encounter_index_trunc + age + gender + race +
+    num_medications + time_in_hospital +
+    number_emergency + number_inpatient + admission_type_id,
+  family=binomial,
+  data=dat
+)
+
+summary(fit_interaction)
+```
+
+Including the insulin × encounter_index_trunc interaction improved model fit (AIC decreased from 4026 to 4014), and several interaction terms were statistically significant. InsulinSteady×Encounter_index (p = 0.003) and InsulinUp×Encounter_index (p \< 0.0001) showed strong evidence that the effect of encounter index differs by insulin group. This indicates that the association between encounter index and readmission is not constant across insulin categories.
+
+The trajectory plot result is consistent with the significant interaction terms in the GLM. Together, they suggest that the slope linking encounter index to readmission probability varies by insulin status. This provides justification for modeling strategies that allow group-specific slopes or correlated repeated measures, rather than relying on a single common slope for all insulin groups.
+
+```{r glm-marginal-traj, echo=FALSE, warning=FALSE, message=FALSE, fig.cap="Model-based predicted 30-day readmission probabilities by encounter index and insulin regimen (GLM with insulin × encounter index interaction)"}
+library(dplyr)
+library(ggplot2)
+
+# Reference covariate profile (most frequent categories; numeric covariates at their means)
+ref_age    <- names(which.max(table(dat$age)))
+ref_gender <- names(which.max(table(dat$gender)))
+ref_race   <- names(which.max(table(dat$race)))
+ref_adm    <- names(which.max(table(dat$admission_type_id)))
+
+time_grid <- 1:5
+
+newdat_glm <- expand.grid(
+  encounter_index_trunc = time_grid,
+  insulin = levels(dat$insulin)
+) %>%
+  mutate(
+    age    = ref_age,
+    gender = ref_gender,
+    race   = ref_race,
+    admission_type_id = ref_adm,
+    num_medications   = mean(dat$num_medications, na.rm = TRUE),
+    time_in_hospital  = mean(dat$time_in_hospital, na.rm = TRUE),
+    number_emergency  = mean(dat$number_emergency, na.rm = TRUE),
+    number_inpatient  = mean(dat$number_inpatient, na.rm = TRUE)
+  )
+
+newdat_glm$pred_prob <- predict(fit_interaction, newdata = newdat_glm, type = "response")
+
+ggplot(newdat_glm, aes(x = encounter_index_trunc, y = pred_prob, color = insulin, group = insulin)) +
+  geom_line(linewidth = 1.1) +
+  geom_point(size = 2) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  scale_x_continuous(breaks = time_grid) +
+  labs(
+    title = "GLM-predicted 30-day readmission by insulin regimen",
+    x = "Encounter index (truncated at 5)",
+    y = "Predicted probability of readmission",
+    color = "Insulin regimen"
+  ) +
+  theme_minimal()
+```
+
+The model-based GLM prediction curves recapitulate the non-parallel trajectories observed in the raw data, with the “No insulin” group showing a pronounced decline in readmission probability over encounters and the insulin-treated groups following flatter, persistently higher-risk curves. This pattern closely aligns with the GLMM-based predictions, indicating that the key insulin-by-time interaction is robust to the choice between marginal and mixed-effects modeling frameworks.
+
+```{r lag1-figure, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Lag-1 Pearson Residual Plot"}
+#Independence Diagnostics
+
+##Lag-1 Pearson residual plot
+
+#Extract Pearson residuals
+pearson_resid <- residuals(fit_glm, type = "pearson")
+pearson_resid <- pearson_resid[!is.na(pearson_resid)]
+
+#Create lag-1 residual within each patient
+lag1_resid <- dplyr::lag(pearson_resid, 1)
+
+lag_df <- data.frame(
+  r_t = pearson_resid[-1],
+  r_t_minus1 = lag1_resid[-1]
+)
+
+#Lag-1 residual plot
+ggplot(lag_df, aes(x = r_t_minus1, y = r_t)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(
+    title = "Lag-1 Pearson Residual Plot",
+    x = "Pearson Residual (t-1)",
+    y = "Pearson Residual (t)"
+  ) +
+  theme_minimal()
+```
+
+The lag-1 Pearson residual plot shows clear clustering and diagonal patterns, indicating positive autocorrelation between residuals from consecutive encounters. This violates the independence assumption of the GLM and suggests that within-patient correlation is present, making methods such as GEE or GLMM more appropriate.
+
+```{r rse-table, echo=FALSE}
+#Robust SE Comparison (Sandwich)
+
+# Model-based summary
+model_sum <- summary(fit_glm)$coef
+
+# Robust (clustered) standard errors
+vcov_cl  <- vcovCL(fit_glm, cluster = ~ patient_nbr)
+robust   <- coeftest(fit_glm, vcov = vcov_cl)
+
+# Build comparison table
+comp_table <- data.frame(
+  Term       = rownames(model_sum),
+  Estimate   = model_sum[, "Estimate"],
+  SE_Model   = model_sum[, "Std. Error"],
+  p_Model    = model_sum[, "Pr(>|z|)"],
+  SE_Robust  = robust[, "Std. Error"],
+  p_Robust   = robust[, "Pr(>|z|)"]
+)
+
+comp_table <- comp_table %>%
+  mutate(across(-Term, ~ round(.x, 4)))
+
+# Display table
+rownames(comp_table) <- NULL
+
+kable(
+  comp_table,
+  caption = "Model-Based vs. Cluster-Robust Standard Errors",
+  align = "c"
+) %>%
+  kable_styling(full_width = FALSE)
+```
+
+Cluster-robust standard errors were computed to adjust for within-patient correlation across repeated encounters. While coefficient estimates were unchanged, several standard errors increased. Notably, the age 50–80 category was no longer statistically significant under the robust SEs (p = 0.066, from the table comparing model-based and cluster-robust standard errors), indicating that the naïve GLM slightly underestimated uncertainty. The main conclusions for number of medications, emergency visits, inpatient visits, and the encounter index remained robust.
+
+### GEE
+
+Generalized Estimating Equations (GEE) provide an alternative framework for analyzing correlated binary outcomes that targets population-averaged effects while accounting for within-cluster correlation through a working correlation structure. In the context of our data, a GEE approach would treat repeated encounters within the same patient as a cluster and estimate marginal log-odds ratios for insulin regimen, encounter history, and their interaction, with robust (“sandwich”) standard errors that remain valid even if the working correlation is misspecified.
+
+Conceptually, the GEE model occupies a middle ground between the independence GLM with cluster-robust standard errors and the subject-specific GLMM. Like the robust GLM, GEE emphasizes average effects at the population level rather than individual patient trajectories. At the same time, it explicitly encodes correlation through, for example, an exchangeable or autoregressive working structure rather than relying solely on cluster-robust variance estimates. Because our primary scientific questions focused on patient-level heterogeneity in baseline risk and rate of change over time, as well as on decomposing variance into within- and between-patient components, we elected to emphasize the GLMM as the main longitudinal modeling strategy.
+
+To connect the subject-specific GLMM estimates back to a population-averaged interpretation analogous to GEE, we applied Zeger’s attenuation method to approximate marginal effects from the random-slope model. The close agreement between conditional and approximate marginal odds ratios suggests that, in this data set, the choice between a GEE-type marginal model and a mixed-effects model is unlikely to materially alter substantive conclusions. We therefore view the GLMM and the marginal GLM with robust standard errors as complementary perspectives on the same underlying associations, with the former providing richer insight into individual trajectories.
+
+### GLMM
+
+```{r glmm-libs, echo=FALSE, message=FALSE, warning=FALSE}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(broom)
+  library(broom.mixed)
+  library(geepack)
+  library(lme4)
+  library(scales)
+  library(MASS)      # for glm.nb
+  library(performance)
+  library(car)
+  library(ggplot2)
+  library(gridExtra) 
+})
+set.seed(667)
+```
+
+#### Exploratory plots
+
+```{r glmm-explore, include=FALSE, message=FALSE, warning=FALSE}
+data <- read_csv('cleaned_diabetes_longitudinal_Nov29.csv')
+glimpse(data)
+data$patient_nbr <- as.factor(data$patient_nbr)
+data$admission_type_id <- as.factor(data$admission_type_id)
+data$race <- as.factor(data$race)
+data$gender <- as.factor(data$gender)
+data$age <- as.factor(data$age)
+data$insulin <- as.factor(data$insulin)
+data$readmit30 <- as.factor(data$readmit30)
+data$age <- relevel(data$age, ref = "50-80")
+data$insulin <- relevel(data$insulin, ref = "No")
+
+data$encounter_index_trunc_c <-  data$encounter_index_trunc - mean(data$encounter_index_trunc)
+
+data$time_in_hospital <- scale(data$time_in_hospital)
+data$num_medications <- scale(data$num_medications)
+data$number_emergency <- scale(data$number_emergency)
+data$number_inpatient <- scale(data$number_inpatient)
+```
+
+Four numeric covariates were standardized to facilitate model convergence and improve the numerical stability of the optimization algorithm. Use centered time (encounter_index_trunc_c = encounter_index_trunc - mean(encounter_index_trunc)) for easier interpretation of main effects.
+
+#### Fit random intercept model
+
+We employed adaptive Gauss-Hermite quadrature with 10 integration points (nAGQ = 10) rather than the standard Laplace approximation (nAGQ = 1). For binary response data, the standard Laplace approximation is known to potentially underestimate the variance of random effects and introduce bias into the fixed effects coefficients. Increasing the number of quadrature points provides a more accurate approximation of the log-likelihood, thereby yielding more reliable parameter estimates.
+
+```{r glmm-m1, include=FALSE, message=FALSE, warning=FALSE}
+# Convergence using Laplace
+m1 <- glmer(readmit30 ~ insulin * encounter_index_trunc_c + 
+                      time_in_hospital + num_medications + 
+                      number_emergency + number_inpatient + 
+                      admission_type_id + age + gender + race +
+                      (1 | patient_nbr), 
+                    data = data, 
+                    family = binomial(link = "logit"), nAGQ = 10,
+                    control = glmerControl(optimizer = "bobyqa", 
+                                           optCtrl = list(maxfun = 2e5)))
+```
+
+We need LRT to check the interaction term
+
+```{r glmm-m2, include=FALSE, message=FALSE, warning=FALSE}
+m2 <- glmer(readmit30 ~ insulin + encounter_index_trunc_c + 
+            time_in_hospital + num_medications + 
+            number_emergency + number_inpatient + 
+            admission_type_id + age + gender + race +
+            (1 | patient_nbr), 
+            data = data, family = binomial, nAGQ = 10,
+            control = glmerControl(optimizer = "bobyqa", 
+                                   optCtrl = list(maxfun = 2e5)))
+anova(m1, m2)
+```
+
+To assess whether the effect of time (encounter index) on readmission risk varies by insulin status, we compared the full model (including the interaction term) against a reduced model (main effects only) using a Likelihood Ratio Test (LRT).
+
+The LRT indicated that the inclusion of the interaction term `insulin * encounter_index_trunc_c` resulted in a statistically significant improvement in model fit ($\chi^2(3) = 16.11$, $p < 0.005$). Furthermore, the Akaike Information Criterion (AIC) decreased substantially from 4019.0 in the reduced model to 4008.9 in the full model, confirming that the interaction model provides a superior fit to the data. This suggests that the trajectory of readmission risk over time is significantly different depending on the patient's insulin regimen.
+
+#### Random Slopes Model
+
+nAGQ = 10 can't be used in the random slope model, so we use nAGQ = 1 here.
+
+```{r glmm-m3, include=FALSE, message=FALSE, warning=FALSE}
+m3 <- glmer(readmit30 ~ insulin * encounter_index_trunc_c + 
+            time_in_hospital + num_medications + 
+            number_emergency + number_inpatient + 
+            admission_type_id + age + gender + race +
+            (1 + encounter_index_trunc_c | patient_nbr),       
+            data = data, family = binomial, nAGQ = 1,
+            control = glmerControl(optimizer = "bobyqa", 
+                                   optCtrl = list(maxfun = 2e5)))
+
+anova(m1, m3)
+```
+
+We evaluated the necessity of including random slopes for the time effect (`encounter_index_trunc_c`) to allow for inter-individual variation in the trajectory of readmission risk. A Likelihood Ratio Test comparing the random-slope model (`m3`) against the random-intercept-only model (`m1`) showed a statistically significant improvement in model fit ($\chi^2(2) = 14.42$, $p < 0.001$). Additionally, the random-slope model exhibited a lower AIC (3998.5 vs. 4008.9), indicating a better trade-off between goodness of fit and model complexity. Consequently, we selected the random-slope model (`m3`) as the final model. This suggests that not only do baseline risks vary across patients, but the rate of change in readmission risk over time also varies significantly between individuals.
+
+```{r glmm-summary, include=FALSE}
+summary(m3)
+m3@optinfo$conv$lme4
+icc(m3)
+```
+
+```{r glmm-modelselect, echo=FALSE, message=FALSE, warning=FALSE}
+library(broom)
+
+# Model selection summary for GLMMs
+msel <- tibble::tibble(
+  Model = c("M0: RI, main effects",
+            "M1: RI, + Insulin × Time",
+            "M2: RS, + Insulin × Time"),
+  Specification = c("Random intercept; no Insulin × Time",
+                    "Random intercept; Insulin × Time",
+                    "Random intercept + random slope; Insulin × Time"),
+  AIC = c(AIC(m2), AIC(m1), AIC(m3)),
+  Decision = c("Reference",
+               "Keep interaction",
+               "Final model")
+)
+
+# Likelihood ratio tests for nested comparisons
+lrt_int <- anova(m2, m1)
+lrt_rs  <- anova(m1, m3)
+
+msel$`LRT χ² (vs simpler)` <- c(NA,
+                                round(lrt_int$Chisq[2], 2),
+                                round(lrt_rs$Chisq[2], 2))
+msel$`p-value` <- c(NA,
+                    signif(lrt_int$`Pr(>Chisq)`[2], 3),
+                    signif(lrt_rs$`Pr(>Chisq)`[2], 3))
+
+msel_display <- msel %>%
+  dplyr::mutate(
+    `LRT χ² (vs simpler)` = ifelse(is.na(`LRT χ² (vs simpler)`), "-", as.character(`LRT χ² (vs simpler)`)),
+    `p-value`             = ifelse(is.na(`p-value`), "-", as.character(`p-value`))
+  )
+
+kable(
+  msel_display,
+  caption = "Model comparison for mixed-effects specifications of 30-day readmission",
+  align = "l"
+) %>%
+  kable_styling(full_width = FALSE)
+```
+
+------------------------------------------------------------------------
+
+#### Interaction Effects
+
+There was a significant interaction between insulin status and the timing of encounters. For the reference group (patients not on insulin), the probability of 30-day readmission showed a steep and significant decline over successive visits ($\beta_{time} = -0.462$, $p < 0.001$). However, this protective temporal trend was significantly attenuated for patients on steady insulin ($\beta_{interaction} = 0.232$, $p = 0.014$) and further diminished for patients whose insulin dosage was increased ($\beta_{interaction} = 0.329$, $p = 0.004$). This indicates that while Insulin Up patients did experience a marginal reduction in risk over time, their **rate of recovery was significantly slower and flatter** compared to patients not requiring insulin therapy.
+
+#### ICC and Variance
+
+The Adjusted Intraclass Correlation Coefficient (ICC) was 0.113, indicating that approximately 11.3% of the latent variation in readmission risk is attributable to unobserved heterogeneity between patients (such as unique genetics, chronic frailty, or compliance behavior). The remaining variation is driven by within-patient time-varying factors or random noise. An ICC exceeding 10% confirms substantial clustering within subjects, validating the necessity of the mixed-effects framework to account for non-independence in the data.
+
+#### Covariance Matrix
+
+The model's direct Maximum Likelihood Estimation (MLE) of the covariance matrix yielded a correlation coefficient of only $\rho = -0.04$. This parameter represents the unbiased population-level relationship. A correlation of -0.04 is statistically negligible, indicating that in the true underlying population, a patient's baseline risk level is effectively independent of their rate of change over time.
+
+#### Diagnostic
+
+```{r glmm-randef, echo=FALSE, warning=FALSE, message=FALSE, fig.cap="Random intercept and slope diagnostics for GLMM m3"}
+rand_effects <- ranef(m3)$patient_nbr
+
+colnames(rand_effects) <- c("Intercept", "Slope")
+
+p_qq_int <- ggplot(rand_effects, aes(sample = Intercept)) +
+  stat_qq(color = "blue", alpha = 0.5) +
+  stat_qq_line(color = "red", linetype = "dashed") +
+  labs(title = "Q-Q Plot: Random Intercepts",
+       subtitle = "Normality of Baseline Risk",
+       x = "Theoretical", y = "Sample") +
+  theme_minimal()
+
+p_qq_slope <- ggplot(rand_effects, aes(sample = Slope)) +
+  stat_qq(color = "darkgreen", alpha = 0.5) +
+  stat_qq_line(color = "red", linetype = "dashed") +
+  labs(title = "Q-Q Plot: Random Slopes",
+       subtitle = "Normality of Time Effect",
+       x = "Theoretical", y = "Sample") +
+  theme_minimal()
+
+p_scatter <- ggplot(rand_effects, aes(x = Intercept, y = Slope)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +  
+  geom_vline(xintercept = 0, linetype="dashed", alpha=0.3) +
+  geom_hline(yintercept = 0, linetype="dashed", alpha=0.3) +
+  labs(title = "Intercept vs. Slope Correlation",
+       subtitle = paste0("Cor: ", round(cor(rand_effects$Intercept, rand_effects$Slope), 3)),
+       x = "Random Intercept (Baseline Risk)",
+       y = "Random Slope (Rate of Change)") +
+  theme_minimal()
+
+grid.arrange(p_qq_int, p_qq_slope, p_scatter, ncol = 2)
+```
+
+**Evaluation of Random Effects Structure:** The diagnostic plots for the random effects structure (Model `m3`) revealed deviations from ideal normality for both random intercepts and random slopes. The Q-Q plots exhibit a "stepped" pattern, which is a characteristic artifact in generalized linear mixed models (GLMMs) when the outcome is binary and cluster sizes are small (i.e., limited visits per patient).
+
+Despite these deviations, two key insights emerged: 1. Correlation of Effects: We observed a moderate negative correlation ($\rho = -0.291$) between the random intercepts and slopes. This suggests a regression to the mean dynamic: patients with higher baseline risks (higher intercepts) tend to experience a sharper decline in risk over time (more negative slopes), whereas lower-risk patients exhibit more stable trajectories. 2. Model Robustness: Although the random effects distributions are not perfectly normal, previous simulation studies in GLMMs have demonstrated that fixed effect estimates remain robust to misspecification of the random effects distribution, especially given our large sample size. Therefore, retaining the random-slope structure provides a more realistic representation of patient heterogeneity without compromising the validity of the fixed effect inferences.
+
+The discrepancy between the visual estimate (-0.291) and the model estimate (-0.04) is explained by the **'Shrinkage Effect'** common in GLMMs. Because many patients have few visits, the model 'shrinks' their uncertain individual estimates toward the population mean, which mathematically forces a spurious negative correlation in the scatterplot. **Therefore, we rely on the model output (-0.04) as the valid inference.** Our final clinical conclusion is that a patient's starting frailty (intercept) does not predict how fast they will stabilize (slope); these are two distinct biological characteristics.
+
+```{r glmm-vif, include=FALSE}
+isSingular(m3)
+vif(m3)
+```
+
+We assessed multicollinearity using the Generalized Variance Inflation Factor (GVIF). All predictors showed low GVIF values, falling well below the conservative threshold of 5.
+
+#### Simulation
+
+```{r sim-heterogeneity, echo=FALSE, warning=FALSE, message=FALSE, fig.cap="Simulated readmission trajectories under varying baseline risk and recovery speed (Random-slope GLMM m3)"}
+library(ggplot2)
+library(dplyr)
+
+vc <- attr(VarCorr(m3)$patient_nbr, "stddev")
+sigma_int <- vc["(Intercept)"]
+sigma_slp <- vc["encounter_index_trunc_c"]
+
+beta_int   <- fixef(m3)["(Intercept)"]
+beta_time  <- fixef(m3)["encounter_index_trunc_c"]
+beta_ins   <- fixef(m3)["insulinSteady"]
+beta_inter <- fixef(m3)["insulinSteady:encounter_index_trunc_c"]
+
+avg_fixed <- mean(predict(m3, type="link", re.form=NA))
+
+visits <- seq(1, 6, length.out = 100)
+visits_c <- visits - mean(data$encounter_index_trunc_c)
+
+scenarios <- expand.grid(
+  Visit = visits,
+  Baseline_Type = c("High Baseline", "Avg Baseline", "Low Baseline"),
+  Recovery_Speed = c("Slow Recovery (Flat)", "Fast Recovery (Steep)")
+)
+
+scenarios <- scenarios %>%
+  mutate(
+    z_int = case_when(
+      Baseline_Type == "High Baseline" ~ 1.96,
+      Baseline_Type == "Avg Baseline"  ~ 0,
+      Baseline_Type == "Low Baseline"  ~ -1.96
+    ),
+    z_slp = case_when(
+      Recovery_Speed == "Slow Recovery (Flat)"  ~ 1.96,
+      Recovery_Speed == "Fast Recovery (Steep)" ~ -1.96
+    )
+  )
+
+# LogOdds = Fixed_Part + (z_int * sigma_int) + (Fixed_Slope + z_slp * sigma_slp) * Time
+scenarios$LogOdds <- avg_fixed + 
+                     (scenarios$z_int * sigma_int) + 
+                     ((beta_time + beta_inter + scenarios$z_slp * sigma_slp) * visits_c) 
+scenarios <- scenarios %>%
+  mutate(
+    visits_centered = Visit - mean(data$encounter_index_trunc_c),
+    LogOdds = avg_fixed + 
+              (z_int * sigma_int) + 
+              (beta_time + beta_inter + z_slp * sigma_slp) * visits_centered,
+    Prob = plogis(LogOdds)
+  )
+
+ggplot(scenarios, aes(x = Visit, y = Prob, color = Baseline_Type, linetype = Recovery_Speed)) +
+  geom_line(linewidth = 1.2) +
+  scale_color_manual(values = c("grey60", "red", "blue")) + # Avg, High, Low
+  scale_linetype_manual(values = c("solid", "dashed")) +    # Fast, Slow
+  scale_y_continuous(labels = scales::percent, limits = c(0, NA)) +
+  labs(
+    title = "Patient Heterogeneity: Baseline vs. Recovery Speed",
+    subtitle = "Decoupling 'Where they start' from 'How fast they improve' (Model m3)",
+    x = "Encounter Number",
+    y = "Predicted Probability of Readmission",
+    color = "Starting Risk (Intercept)",
+    linetype = "Response Rate (Slope)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    legend.key.width = unit(2, "cm"),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+Our Random Slope model (m3) reveals a more nuanced reality because the correlation between baseline and slope is near zero. A simulation plot illustrates six illustrative scenarios defined by two clinically meaningful dimensions. The color encodes starting risk (high-, average-, and low-risk baselines), and the line type encodes recovery speed (fast versus slow decline in risk over encounters). Among otherwise similar high-risk patients, those with fast recovery exhibit a steep drop in readmission probability over visits, whereas those with slow recovery remain persistently high-risk despite repeated encounters. Distinguishing between these patterns is critical for targeting limited care-management resources toward patients whose trajectories are resistant to improvement.
+
+```{r subject-trajectories, echo=FALSE, warning=FALSE, message=FALSE, fig.cap="Subject-specific predicted trajectories for a random sample of nine patients (Random-slope GLMM m3)"}
+preds <- augment(m3, data = data, type.predict = "response") %>%
+  mutate(Visit = encounter_index_trunc)
+
+set.seed(42)
+sample_subjects <- sample(unique(preds$patient_nbr), 9)
+
+preds %>%
+  filter(patient_nbr %in% sample_subjects) %>%
+  ggplot(aes(x = Visit, y = .fitted, color = insulin, group = patient_nbr)) +
+  geom_line(linewidth = 1, alpha = 0.8) +
+  geom_jitter(aes(y = as.numeric(as.character(readmit30))), 
+              height = 0.02, width = 0.05, shape = 21, fill = "white", size = 2.5, stroke = 1) +
+  
+  labs(
+    y = "Predicted Probability of Readmission",
+    x = "Encounter Index",
+    title = "Subject-Specific Predicted Trajectories (Sample n=9)",
+    subtitle = "Lines = GLMM fitted values (BLUPs); Points = Observed Outcomes (0=No, 1=Yes)",
+    color = "Insulin Status"
+  ) +
+
+  scale_y_continuous(labels = scales::percent, limits = c(-0.05, 1.05), breaks = seq(0, 1, 0.2)) +
+  scale_x_continuous(breaks = 1:6) +
+  scale_color_brewer(palette = "Set1") + 
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "bottom"
+  )
+```
+
+```{r zeger-effects, echo=FALSE, message=FALSE, warning=FALSE}
+sigma2_b <- VarCorr(m3)$patient_nbr[1,1]
+
+# Extract treatment effect
+cond_est <- tidy(m3, effects = "fixed", conf.int = TRUE) %>%
+  dplyr::select(term, estimate, std.error, conf.low, conf.high)
+
+# Apply Zeger attenuation formula (no printed output; values reported in text)
+zeger_factor <- sqrt(1 + 0.346 * sigma2_b)
+attenuation_pct <- (1 - 1/zeger_factor) * 100
+zeger_table <- cond_est %>%
+  mutate(
+    # Conditional Results
+    Cond_Beta = estimate,
+    Cond_OR = exp(estimate),
+    # Zeger Approximate Marginal Results
+    Marg_Beta_Approx = estimate / zeger_factor,
+    Marg_OR_Approx = exp(estimate / zeger_factor)
+  ) %>%
+  dplyr::select(term, Cond_Beta, Cond_OR, Marg_Beta_Approx, Marg_OR_Approx) %>%
+  filter(term != "(Intercept)") # Focus on effects
+knitr::kable(zeger_table, digits = 3, caption = "Conditional (GLMM) vs. Approximate Marginal (Zeger) Effects")
+```
+
+------------------------------------------------------------------------
+
+#### Results: Analysis of 30-Day Readmission Risk (Random-Slope GLMM)
+
+##### 1. Model Specification and Estimation
+
+To formally account for correlation among repeated encounters within patients, we fitted a logistic Generalized Linear Mixed Model (GLMM). Let $Y_{ij}$ denote the 30-day readmission indicator for patient $i$ at encounter $j$, and let $\text{Time}_{ij}$ denote the centered, truncated encounter index. The conditional log-odds of readmission are modeled as $$
+\text{logit}\{\Pr(Y_{ij}=1 \mid \mathbf{b}_i)\}
+= \beta_0
+  + \boldsymbol{\beta}_{\text{Ins}}^\top \mathbf{Z}_{\text{Ins},ij}
+  + \beta_{\text{Time}} \,\text{Time}_{ij}
+  + \boldsymbol{\beta}_{\text{Int}}^\top \big(\mathbf{Z}_{\text{Ins},ij} \times \text{Time}_{ij}\big)
+  + \boldsymbol{\gamma}^\top \mathbf{X}_{ij}
+  + b_{0i} + b_{1i}\,\text{Time}_{ij},
+$$ where $\mathbf{Z}_{\text{Ins},ij}$ encodes insulin regimen, $\mathbf{X}_{ij}$ collects additional covariates (length of stay, number of medications, prior emergency and inpatient visits, admission type, age group, gender, and race), and $\mathbf{b}_i=(b_{0i},b_{1i})^\top$ are patient-specific random effects. We assumed a bivariate normal distribution for the random effects, $$
+\mathbf{b}_i \sim N\!\left(
+  \begin{pmatrix}0 \\[2pt] 0\end{pmatrix},
+  \begin{pmatrix}
+    \sigma_0^2 & \rho\,\sigma_0\sigma_1 \\
+    \rho\,\sigma_0\sigma_1 & \sigma_1^2
+  \end{pmatrix}
+\right),
+$$ so that $\sigma_0^2$ and $\sigma_1^2$ represent between-patient variability in baseline risk and time trends, respectively, and $\rho$ captures the correlation between baseline risk and slope. Under this parameterization, an approximate marginal intraclass correlation coefficient (ICC) for the latent propensity to be readmitted can be defined as $$
+\text{ICC}
+= \frac{\sigma_0^2}{\sigma_0^2 + \pi^2/3},
+$$ where $\pi^2/3$ is the variance of the standard logistic distribution. Fixed effects were estimated by maximum likelihood using adaptive Gauss–Hermite quadrature for the random-intercept model and the Laplace approximation for the random-slope model.
+
+Model selection proceeded in stages. We first compared a random-intercept model with and without the insulin-by-time interaction using a Likelihood Ratio Test (LRT) and Akaike Information Criterion (AIC), then compared the best-fitting random-intercept model against a random-slope specification. The inclusion of the insulin-by-time interaction significantly improved model fit ($\chi^2(3) = 16.11$, $p < 0.005$, AIC: 4008.9 vs. 4019.0). Allowing random slopes for time further improved fit relative to the random-intercept model ($\chi^2(2) = 14.42$, $p < 0.001$, AIC: 3998.5 vs. 4008.9), indicating substantial between-patient heterogeneity in both baseline risk and trajectories over time. Consequently, the random-slope GLMM (model `m3`) was adopted as the primary longitudinal model.
+
+##### 2. Random Effects and Subject Heterogeneity
+
+The final model revealed substantial patient heterogeneity. The variance of the random intercept was **0.175** ($\text{SD} = 0.418$), indicating significant differences in initial frailty across patients. The variance of the random slope was **0.165** ($\text{SD} = 0.406$), confirming that patients recover (or deteriorate) at significantly different rates. The correlation between random intercepts and slopes was negligible ($\rho = -0.04$), suggesting that a patient's baseline risk is largely independent of their rate of recovery. The Adjusted Intraclass Correlation Coefficient (ICC) was **0.113**, implying that approximately **11.3%** of the variation in readmission risk is attributable to unobserved subject-specific characteristics.
+
+##### 3. Fixed Effects: The Interaction of Insulin and Time
+
+The analysis demonstrated a significant interaction between insulin status and the timing of encounters. Protective Trend in Reference Group: For patients not on insulin, the probability of readmission decreased steeply with successive visits ($\text{Cond. OR} = 0.630$, $\beta = -0.462, p < 0.001$), indicating a strong 'learning' or stabilization effect. Attenuation in Insulin Groups: This protective temporal trend was significantly blunted for patients on insulin. The interaction term for the Insulin Steady group was significant ($\beta_{interaction} = 0.232, p = 0.014$), and even more pronounced for the Insulin Up group ($\beta_{interaction} = 0.329, p = 0.004$). While 'Insulin Up' patients still experienced a slight decrease in risk over time (Net slope $\approx -0.13$), their rate of improvement was significantly slower compared to the reference group.
+
+##### 4. Conditional vs. Approximate Marginal Effects (Zeger Method)
+
+Since GLMM parameters represent subject-specific (conditional) effects, we applied Zeger's method to approximate population-averaged (marginal) effects.The Zeger attenuation factor was **1.03**, resulting in a modest **2.89% reduction** in effect sizes when scaling from the individual to the population level. The Conditional ORs and Marginal ORs remained highly consistent (e.g., Insulin Up Cond. OR = 1.129 vs. Marg. OR = 1.125). This suggests that despite patient heterogeneity, the observed risk factors apply robustly to the population average.
+
+##### 5. Other Clinical Predictors
+
+Controlling for the time-insulin interaction, other clinical factors showed the following associations: Prior inpatient visits remained a significant predictor, with each additional visit increasing the odds of readmission by 16.4% ($\text{Cond. OR} = 1.164, p = 0.019$).The number of medications showed a borderline significant association ($\text{Cond. OR} = 1.100, p = 0.051$), serving as a likely proxy for comorbidity complexity. Age, gender, and race were not statistically significant in this adjusted longitudinal framework.
+
+------------------------------------------------------------------------
+
+#### Summary Conclusion
+
+In conclusion, the **Random Slope model** provides superior fit, revealing that patients differ not only in their baseline risk but also in their recovery trajectories. While the "No Insulin" group exhibits a rapid decline in readmission risk over repeated encounters, patients requiring insulin dose escalation ("Insulin Up") show a significantly **flatter recovery curve**. This suggests that insulin intensification serves as a marker for a more resistant, high-risk phenotype that benefits less from the standard "stabilization over time" effect.
+
+### Comparison
+
+We compared a series of modeling strategies that make different assumptions about within-patient correlation and target different inferential estimands. The baseline analysis used a standard logistic GLM treating encounters as independent. This model provided interpretable population-averaged odds ratios and adequate global fit (Hosmer–Lemeshow p = 0.66), but the modest discrimination (AUC ≈ 0.59) and evidence of serial correlation in the lag-1 Pearson residual plot indicated that the independence assumption was violated. Cluster-robust (sandwich) standard errors partially addressed this issue by inflating uncertainty for clustered observations without altering point estimates; several covariates, such as age 50–80, lost nominal statistical significance under robust SEs, highlighting that the naïve GLM underestimated uncertainty.
+
+We then fitted a subject-specific Generalized Linear Mixed Model (GLMM) with random intercepts and, subsequently, random slopes for encounter index. Compared with the marginal GLM, the GLMM yielded effect estimates of similar magnitude for key clinical predictors (e.g., prior inpatient utilization, number of medications), but revealed substantial between-patient heterogeneity in both baseline risk and trajectories over time. The variance components (intercept SD ≈ 0.42, slope SD ≈ 0.41) and an adjusted ICC of 0.113 showed that approximately 11% of the variability in readmission risk was attributable to unobserved patient-level factors. Likelihood ratio tests and AIC clearly favored the random-slope model over both the random-intercept-only GLMM and the marginal GLM, indicating that allowing patient-specific time trends meaningfully improves model fit.
+
+From an inferential perspective, the GLMM focuses on subject-specific (conditional) effects, while the GLM with cluster-robust standard errors targets population-averaged effects. Using Zeger’s attenuation factor (\~1.03), we showed that conditional and approximate marginal odds ratios from the GLMM were nearly identical, suggesting that the substantive conclusions are robust to the choice of estimand. In particular, the insulin-by-time interaction remained significant and directionally consistent across all frameworks: patients in the “No insulin” group experienced a steep decline in readmission risk with successive encounters, whereas those with insulin dose escalation (“Insulin Up”) showed a markedly attenuated improvement. Overall, the comparison indicates that while simpler marginal models capture the main average effects, the random-slope GLMM is better suited to describing clinically relevant heterogeneity in longitudinal readmission trajectories.
+
+Taken together, these results highlight clear trade-offs among the candidate models. The independence GLM is simple, computationally efficient, and yields easily interpretable population-averaged odds ratios, but it rests on an implausible independence assumption and underestimates uncertainty when within-patient correlation is present. The GLM with cluster-robust standard errors relaxes the variance assumptions and provides robust population-averaged inference, yet it cannot decompose variation into within- and between-patient components or describe individual trajectories. The random-intercept GLMM captures between-patient heterogeneity in baseline risk but still imposes a common time trend for all subjects. By contrast, the random-slope GLMM allows both baseline risk and the rate of change over time to vary by patient, accommodates the observed correlation structure, and, after Zeger attenuation, yields marginal effects that closely align with the robust GLM. For these reasons, we base our primary clinical interpretations and recommendations on the random-slope GLMM, using the marginal GLM with cluster-robust standard errors as a complementary sensitivity analysis for population-averaged effects.
+
+### Discussion
+
+In this longitudinal analysis of diabetic inpatients, we found that 30-day readmission risk declined meaningfully over successive encounters, but the magnitude of this improvement depended strongly on insulin regimen. Among patients not treated with insulin, repeated encounters were associated with a steep reduction in the odds of readmission, consistent with a stabilization or “learning” effect as care became more coordinated over time. In contrast, patients requiring insulin intensification, particularly those in the “Insulin Up” group, exhibited a much flatter trajectory: their readmission risk started higher and declined more slowly, even after adjusting for prior utilization, admission type, and comorbidity burden. Approximately 11% of the total variability in readmission risk was attributable to unobserved patient-level heterogeneity, underscoring the importance of modeling repeated measures at the individual level.
+
+These findings have several clinical implications. First, insulin intensification appears to function less as a simple treatment decision and more as a marker of a high-risk phenotype characterized by metabolic instability and treatment complexity. Such patients not only start at a higher baseline risk of readmission but also benefit less from the “usual” gains that accrue with ongoing contact with the health system. Second, the strong and persistent effects of prior inpatient and emergency visits indicate that recent healthcare utilization captures a dimension of frailty and system-level vulnerability that is not fully explained by demographic characteristics. Taken together, these results suggest that readmission reduction efforts should prioritize patients undergoing insulin escalation and those with heavy recent utilization, for example through more intensive discharge planning, early outpatient follow-up, or structured insulin titration programs.
+
+Methodologically, our study illustrates the value of explicitly accounting for within-patient correlation in longitudinal electronic health record data. Although the marginal GLM with cluster-robust standard errors produced broadly similar point estimates and adequate calibration, diagnostics revealed serial correlation that violated the independence assumption. The random-slope GLMM not only improved statistical fit but also provided a more clinically meaningful decomposition of variation into baseline risk and trajectory over time. The close agreement between conditional and approximate marginal odds ratios implies that our substantive conclusions are not an artifact of the modeling framework, but rather reflect stable underlying associations between insulin regimen, encounter history, and readmission risk.
+
+Several limitations should be considered when interpreting these results. First, the analysis relies on routinely collected administrative and clinical data, which are subject to coding error and lack detailed information on disease severity, glycemic control (e.g., HbA1c), outpatient adherence, and socioeconomic determinants of health. Residual confounding by these unmeasured factors is likely. Second, patients contributed a limited number of encounters, and the binary outcome led to non-ideal normality of the random effects, as suggested by the stepped Q–Q plots. While prior work indicates that GLMM fixed effects are robust to moderate misspecification of the random-effects distribution, this remains a potential source of bias. Third, the modest AUC (\~0.59) highlights that our models, though useful for inference, are not suitable as stand-alone clinical prediction tools; future work should incorporate richer covariate information and possibly flexible machine-learning components if prediction is the primary goal.
+
+Despite these limitations, our study leverages a large, real-world cohort with repeated encounters per patient, employs rigorous diagnostic checks, and compares complementary modeling frameworks for correlated binary outcomes. The convergence of evidence across models strengthens confidence in the central conclusion: while most patients experience declining readmission risk over time, those requiring insulin escalation constitute a persistently vulnerable subgroup that does not fully “catch up” despite repeated contact with the healthcare system. Targeting this subgroup for enhanced transitional care and proactive insulin management may yield disproportionate gains in reducing potentially preventable readmissions. Future research should investigate whether interventions tailored to insulin-intensified patients can modify the trajectory we observed and explore how integrating patient-level behavioral and social data further improves risk stratification.
+
+### Conclusion
+
+In summary, we provide a longitudinal characterization of 30-day readmission risk among patients with diabetes that integrates marginal and subject-specific modeling approaches. Readmission risk generally declines with repeated encounters, but this improvement is substantially attenuated in patients undergoing insulin escalation, who remain at persistently elevated risk even after accounting for prior utilization and other covariates. By demonstrating that conclusions are robust across GLM with robust standard errors and random-slope GLMMs, while highlighting clinically meaningful heterogeneity in individual trajectories, our work underscores the need for targeted, patient-centered strategies focused on insulin-intensified and high-utilization patients to effectively reduce preventable readmissions.

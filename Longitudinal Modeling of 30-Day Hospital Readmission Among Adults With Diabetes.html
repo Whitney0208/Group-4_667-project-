@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.7.32">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Zhangziyan Jiang">
+<meta name="author" content="Wanbing Wang">
+<meta name="author" content="Xiaochen Zhou">
+<meta name="author" content="Muyao Tang">
+<meta name="author" content="Danni Liu">
+
+<title>Longitudinal Modeling of 30-Day Hospital Readmission Among Adults With Diabetes</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="667_Group4_files/libs/clipboard/clipboard.min.js"></script>
+<script src="667_Group4_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="667_Group4_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="667_Group4_files/libs/quarto-html/popper.min.js"></script>
+<script src="667_Group4_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="667_Group4_files/libs/quarto-html/anchor.min.js"></script>
+<link href="667_Group4_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="667_Group4_files/libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="667_Group4_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="667_Group4_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="667_Group4_files/libs/bootstrap/bootstrap-bb462d781dde1847d9e3ccf7736099dd.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="667_Group4_files/libs/kePrint-0.0.1/kePrint.js"></script>
+
+<link href="667_Group4_files/libs/lightable-0.0.1/lightable.css" rel="stylesheet">
+
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Longitudinal Modeling of 30-Day Hospital Readmission Among Adults With Diabetes</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Authors</div>
+    <div class="quarto-title-meta-contents">
+             <p>Zhangziyan Jiang </p>
+             <p>Wanbing Wang </p>
+             <p>Xiaochen Zhou </p>
+             <p>Muyao Tang </p>
+             <p>Danni Liu </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="introduction" class="level3">
+<h3 class="anchored" data-anchor-id="introduction">Introduction</h3>
+<p>Hospital readmissions among adults with diabetes impose a substantial burden on patients and health systems, and 30-day readmission has become a widely used quality metric. Prior work has identified demographic factors, comorbidity burden, and prior healthcare utilization as important correlates of early readmission, but far less is known about how risk evolves over repeated encounters for the same individual and whether longitudinal trajectories differ by treatment patterns such as insulin use or intensification. Understanding these dynamics is essential for designing targeted interventions that prioritize patients who remain persistently high-risk despite ongoing contact with the healthcare system.</p>
+<p>Leveraging an electronic health record–derived cohort of diabetic inpatients with multiple hospital encounters, we examined the association between insulin regimen, encounter history, and 30-day readmission. We first used a marginal logistic GLM to characterize population-averaged associations and evaluate whether a simple independence model provides an adequate description of the data. We then assessed within-patient correlation and formally compared this marginal approach with subject-specific generalized linear mixed models that incorporate random intercepts and random slopes for encounter index.</p>
+<p>Our primary aims were threefold: (i) to quantify how 30-day readmission risk changes with successive encounters, (ii) to determine whether these trajectories differ across insulin treatment groups, particularly patients undergoing insulin dose escalation, and (iii) to evaluate the extent to which accounting for within-patient correlation changes substantive conclusions. By integrating model diagnostics, robust standard errors, and mixed-effects modeling, we sought to provide a rigorous and clinically interpretable description of longitudinal readmission risk in this high-risk population.</p>
+</section>
+<section id="data" class="level3">
+<h3 class="anchored" data-anchor-id="data">Data</h3>
+<p>We analyzed 1488 unique patients contributing 4160 inpatient encounters from an existing de-identified administrative database of adults with diabetes. The overall 30-day readmission rate was 19.4%, indicating that early readmission is a frequent outcome in this population with repeated hospitalizations. Across insulin regimens, the numbers of unique patients ever observed on each regimen, together with the corresponding encounter counts and 30-day readmission proportions, are summarized in the table above. Because some individuals transition between regimens over time, the patient counts by regimen sum to more than the overall number of unique patients.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table caption-top table-sm table-striped small" data-quarto-postprocess="true">
+<caption>Sample size and 30-day readmission by insulin regimen</caption>
+<thead>
+<tr class="header">
+<th style="text-align: center;" data-quarto-table-cell-role="th">Insulin regimen</th>
+<th style="text-align: center;" data-quarto-table-cell-role="th">Patients (per regimen)</th>
+<th style="text-align: center;" data-quarto-table-cell-role="th">Encounters</th>
+<th style="text-align: center;" data-quarto-table-cell-role="th">30-day readmission</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: center;">Down</td>
+<td style="text-align: center;">396</td>
+<td style="text-align: center;">591</td>
+<td style="text-align: center;">20.6%</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;">No</td>
+<td style="text-align: center;">908</td>
+<td style="text-align: center;">1745</td>
+<td style="text-align: center;">17.5%</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;">Steady</td>
+<td style="text-align: center;">778</td>
+<td style="text-align: center;">1256</td>
+<td style="text-align: center;">20.9%</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;">Up</td>
+<td style="text-align: center;">369</td>
+<td style="text-align: center;">568</td>
+<td style="text-align: center;">20.8%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section id="glm" class="level3">
+<h3 class="anchored" data-anchor-id="glm">GLM</h3>
+<p>GLM Method:</p>
+<p>Let <span class="math inline">\(i=1,\dots,N\)</span> index patients and <span class="math inline">\(j=1,\dots,n_i\)</span> index encounters within patient <span class="math inline">\(i\)</span>. For each encounter we observe a binary outcome <span class="math display">\[
+Y_{ij} =
+\begin{cases}
+1, &amp; \text{if patient } i \text{ is readmitted within 30 days after encounter } j,\\
+0, &amp; \text{otherwise,}
+\end{cases}
+\]</span> and a vector of covariates <span class="math inline">\(\mathbf{X}_{ij}\)</span> including insulin regimen, demographics, encounter-level severity indicators, and prior utilization measures. As an initial marginal analysis, we modeled the encounter-level readmission probability using a logistic generalized linear model (GLM) with a logit link, <span class="math display">\[
+\text{logit}\{\Pr(Y_{ij}=1)\}
+= \beta_0
+  + \boldsymbol{\beta}_{\text{Ins}}^\top \mathbf{Z}_{\text{Ins},ij}
+  + \boldsymbol{\beta}_{\text{Demo}}^\top \mathbf{Z}_{\text{Demo},ij}
+  + \boldsymbol{\beta}_{\text{Util}}^\top \mathbf{Z}_{\text{Util},ij}
+  + \beta_{\text{Enc}}\,\text{Time}_{ij},
+\]</span> where <span class="math inline">\(\mathbf{Z}_{\text{Ins},ij}\)</span> encodes insulin regimen (No, Steady, Up, Down), <span class="math inline">\(\mathbf{Z}_{\text{Demo},ij}\)</span> collects age group, gender, and race, <span class="math inline">\(\mathbf{Z}_{\text{Util},ij}\)</span> contains encounter-level severity and prior utilization measures (number of medications, length of stay, numbers of prior emergency and inpatient visits, admission type), and <span class="math inline">\(\text{Time}_{ij}\)</span> denotes the truncated encounter index (capped at 5). This model assumes that, conditional on <span class="math inline">\(\mathbf{X}_{ij}\)</span>, the <span class="math inline">\(\{Y_{ij}\}\)</span> are independent across encounters and across patients. Regression coefficients were exponentiated to obtain odds ratios (ORs), so that <span class="math inline">\(\exp(\beta_k)\)</span> is interpreted as the multiplicative change in the odds of readmission associated with a one-unit increase in the corresponding covariate, holding other variables fixed. Wald <span class="math inline">\(z\)</span>-tests were used for inference on regression coefficients.</p>
+<p>With respect to covariate selection, we adopted a hypothesis-driven strategy rather than data-driven stepwise procedures. Demographic variables (age group, gender, race) and clinical severity or utilization indicators (admission type, length of stay, numbers of prior emergency and inpatient visits, number of medications) were retained regardless of individual <span class="math inline">\(p\)</span>-values in order to control for potential confounding and to preserve comparability with prior readmission studies. Time and its interaction with insulin regimen were then added explicitly to address our primary scientific question about longitudinal trajectories under different treatment patterns.</p>
+<p>To evaluate the contribution of encounter history, we fit two versions of the GLM: one including the truncated encounter index and one excluding it. Comparing these models allowed us to assess whether encounter index added explanatory value and should be retained before proceeding to more advanced longitudinal modeling frameworks.</p>
+<p>Regression coefficients were exponentiated to obtain odds ratios (ORs), and profile likelihood confidence intervals were computed using confint(). This allowed effects to be interpreted as multiplicative changes in the odds of readmission while maintaining likelihood-based inference.</p>
+<p>Generalized variance inflation factors (GVIFs) were calculated to evaluate multicollinearity, particularly for categorical predictors with multiple degrees of freedom. This ensured stable coefficient estimation and interpretability.</p>
+<p>We performed residual diagnostics, influence diagnostics, and goodness-of-fit assessments to evaluate whether the GLM adequately captured the relationship between predictors and 30-day readmission. Deviance and Pearson residuals were plotted against fitted probabilities to assess functional form, detect outlying patterns, and evaluate the appropriateness of the logit link. Overdispersion was examined by comparing the residual deviance to its degrees of freedom. Influence diagnostics were conducted using Cook’s distance to identify observations with disproportionate leverage on coefficient estimates. Model calibration was assessed using the Hosmer–Lemeshow test, and predictive discrimination was evaluated using the receiver operating characteristic (ROC) curve and its corresponding area under the curve (AUC). Together, these diagnostics provided a comprehensive assessment of model fit and predictive performance.</p>
+<p>Because encounters were nested within patients, the independence assumption of a standard GLM may be violated. To explore potential within-patient dependence, we first generated encounter-level trajectory plots, which display how observed readmission proportions vary across encounter index and insulin categories. These plots provide an initial visual assessment of temporal patterns and possible effect modification over repeated encounters.</p>
+<p>Next, we computed lag-1 Pearson residuals, plotting residuals at encounter t against residuals from encounter t−1. This diagnostic examines serial correlation among consecutive encounters; systematic dependence or diagonal structure in this plot would indicate violation of the independence assumption.</p>
+<p>To evaluate whether the association between insulin status and readmission varied across encounter history, we fit a logistic GLM including insulin × encounter_index_trunc interaction terms. This model tested whether the effect of insulin depended on how many encounters a patient had previously accumulated. Model selection using AIC guided whether the interaction terms improved model specification. Conceptually, one could also entertain richer mean structures that allow for non-linear time effects and additional interactions (e.g., quadratic terms in <span class="math inline">\(\text{Time}_{ij}\)</span>, and interaction terms between insulin regimen and prior utilization), but given the modest number of encounters per patient and our focus on a single, clinically interpretable interaction, we restricted our implemented analyses to the linear-time specification with an insulin-by-time interaction.</p>
+<p>Formally, the interaction model can be written as <span class="math display">\[
+\text{logit}\{\Pr(Y_{ij}=1)\}
+= \beta_0
+  + \boldsymbol{\beta}_{\text{Ins}}^\top \mathbf{Z}_{\text{Ins},ij}
+  + \beta_{\text{Time}}\,\text{Time}_{ij}
+  + \boldsymbol{\beta}_{\text{Int}}^\top\big(\mathbf{Z}_{\text{Ins},ij} \times \text{Time}_{ij}\big)
+  + \boldsymbol{\gamma}^\top \mathbf{W}_{ij},
+\]</span> where <span class="math inline">\(\mathbf{W}_{ij}\)</span> denotes the remaining covariates (demographics, admission type, prior utilization, and encounter-level severity). In this parameterization, <span class="math inline">\(\beta_{\text{Time}}\)</span> captures the time trend in the reference insulin group (No insulin), while each component of <span class="math inline">\(\boldsymbol{\beta}_{\text{Int}}\)</span> quantifies how the time trend is modified in the corresponding insulin category. Thus <span class="math inline">\(\exp\{\beta_{\text{Time}} + \beta_{\text{Int},k}\}\)</span> gives the multiplicative change in the odds of readmission per one-unit increase in encounter index for insulin group <span class="math inline">\(k\)</span>, relative to the baseline group.</p>
+<p>Finally, to account for potential correlation directly in the inferential framework, we computed cluster-robust (sandwich) standard errors at the patient level. These robust SEs adjust for within-patient clustering while leaving coefficient estimates unchanged, allowing valid inference even when observations are correlated. Comparing model-based and cluster-robust standard errors helped assess the extent to which within-patient dependence affected uncertainty estimates and whether a marginal GLM remained adequate or if repeated-measures models (GEE or GLMM) might be required.</p>
+<p>GLM Result:</p>
+<p>Here two logistic GLMs were fitted. One includes a truncated encounter index(capped at 5), and one without it. Including encounter_trunc improved model fit (AIC 4026 vs 4047) and reduced residual deviance (3992.2 vs 4015). The truncated index was highly significant(p&lt;0.001).</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Odds Ratios (OR) with 95% Confidence Intervals for Logistic GLM</caption>
+<colgroup>
+<col style="width: 24%">
+<col style="width: 42%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 8%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;"></th>
+<th style="text-align: left;">Term</th>
+<th style="text-align: right;">OR</th>
+<th style="text-align: right;">2.5 %</th>
+<th style="text-align: right;">97.5 %</th>
+<th style="text-align: right;">p.value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">(Intercept)</td>
+<td style="text-align: left;">Intercept</td>
+<td style="text-align: right;">0.2683</td>
+<td style="text-align: right;">0.1906</td>
+<td style="text-align: right;">0.3758</td>
+<td style="text-align: right;">0.0000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">insulinDown</td>
+<td style="text-align: left;">Insulin: Down vs No</td>
+<td style="text-align: right;">1.1268</td>
+<td style="text-align: right;">0.8805</td>
+<td style="text-align: right;">1.4352</td>
+<td style="text-align: right;">0.3379</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">insulinSteady</td>
+<td style="text-align: left;">Insulin: Steady vs No</td>
+<td style="text-align: right;">1.2006</td>
+<td style="text-align: right;">0.9947</td>
+<td style="text-align: right;">1.4483</td>
+<td style="text-align: right;">0.0564</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">insulinUp</td>
+<td style="text-align: left;">Insulin: Up vs No</td>
+<td style="text-align: right;">1.1606</td>
+<td style="text-align: right;">0.9031</td>
+<td style="text-align: right;">1.4841</td>
+<td style="text-align: right;">0.2396</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">age&gt;=80</td>
+<td style="text-align: left;">Age: ≥80 vs ≤50</td>
+<td style="text-align: right;">0.8733</td>
+<td style="text-align: right;">0.6689</td>
+<td style="text-align: right;">1.1414</td>
+<td style="text-align: right;">0.3201</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">age50-80</td>
+<td style="text-align: left;">Age: 50–80 vs ≤50</td>
+<td style="text-align: right;">0.7852</td>
+<td style="text-align: right;">0.6317</td>
+<td style="text-align: right;">0.9804</td>
+<td style="text-align: right;">0.0310</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">genderMale</td>
+<td style="text-align: left;">Gender: Male vs Female</td>
+<td style="text-align: right;">1.0052</td>
+<td style="text-align: right;">0.8577</td>
+<td style="text-align: right;">1.1778</td>
+<td style="text-align: right;">0.9484</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">raceCaucasian</td>
+<td style="text-align: left;">Race: Caucasian vs African American</td>
+<td style="text-align: right;">0.9644</td>
+<td style="text-align: right;">0.7911</td>
+<td style="text-align: right;">1.1802</td>
+<td style="text-align: right;">0.7226</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">raceOther</td>
+<td style="text-align: left;">Race: Other vs African American</td>
+<td style="text-align: right;">0.9632</td>
+<td style="text-align: right;">0.5787</td>
+<td style="text-align: right;">1.5459</td>
+<td style="text-align: right;">0.8806</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">num_medications</td>
+<td style="text-align: left;">Number of medications</td>
+<td style="text-align: right;">1.0127</td>
+<td style="text-align: right;">1.0012</td>
+<td style="text-align: right;">1.0241</td>
+<td style="text-align: right;">0.0294</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">time_in_hospital</td>
+<td style="text-align: left;">Length of stay (days)</td>
+<td style="text-align: right;">1.0116</td>
+<td style="text-align: right;">0.9822</td>
+<td style="text-align: right;">1.0414</td>
+<td style="text-align: right;">0.4399</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">number_emergency</td>
+<td style="text-align: left;">Number of prior emergency visits</td>
+<td style="text-align: right;">1.0731</td>
+<td style="text-align: right;">1.0077</td>
+<td style="text-align: right;">1.1410</td>
+<td style="text-align: right;">0.0254</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">number_inpatient</td>
+<td style="text-align: left;">Number of prior inpatient visits</td>
+<td style="text-align: right;">1.1769</td>
+<td style="text-align: right;">1.0969</td>
+<td style="text-align: right;">1.2626</td>
+<td style="text-align: right;">0.0000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">admission_type_id2</td>
+<td style="text-align: left;">Admission type: Urgent vs Emergency</td>
+<td style="text-align: right;">1.0650</td>
+<td style="text-align: right;">0.8596</td>
+<td style="text-align: right;">1.3140</td>
+<td style="text-align: right;">0.5606</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">admission_type_id3</td>
+<td style="text-align: left;">Admission type: Elective vs Emergency</td>
+<td style="text-align: right;">0.9027</td>
+<td style="text-align: right;">0.7206</td>
+<td style="text-align: right;">1.1248</td>
+<td style="text-align: right;">0.3670</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">admission_type_id5</td>
+<td style="text-align: left;">Admission type: Other vs Emergency</td>
+<td style="text-align: right;">0.8498</td>
+<td style="text-align: right;">0.6302</td>
+<td style="text-align: right;">1.1312</td>
+<td style="text-align: right;">0.2749</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">encounter_index_trunc</td>
+<td style="text-align: left;">Truncated encounter index</td>
+<td style="text-align: right;">0.8054</td>
+<td style="text-align: right;">0.7348</td>
+<td style="text-align: right;">0.8812</td>
+<td style="text-align: right;">0.0000</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>In the full GLM model, several predictors were significantly associated with 30-day readmission, including age 50–80, number of medications, prior emergency visits, prior inpatient visits, and the truncated encounter index. Based on the odds ratio table, patients aged 50–80 had about 20% lower odds of 30-day readmission compared with those ≤50 years (OR = 0.79, 95% CI: 0.61–0.98). This means that, holding all other variables constant, being in the 50–80 age group is associated with a meaningful reduction in readmission risk. Each additional medication slightly raised the odds of readmission (OR = 1.01, 95% CI: 1.00–1.02), and greater numbers of emergency visits (OR = 1.07, 95% CI: 1.01–1.13) and inpatient visits (OR = 1.18, 95% CI: 1.10–1.27) were associated with higher odds. In contrast, the truncated encounter index showed a strong protective effect; each one-unit increase (up to the cap of 5) corresponded to roughly a 20% reduction in the odds of readmission (OR = 0.81, 95% CI: 0.73–0.88). Confidence intervals for the significant predictors did not cross 1, supporting their statistical significance. InsulinSteady has a p-value slightly above 0.05, suggesting a possible increase in readmission risk, although its 95% confidence interval crossed 1 and therefore the effect was not statistically significant.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Variance Inflation Factors for Logistic GLM</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;"></th>
+<th style="text-align: center;">GVIF</th>
+<th style="text-align: center;">Df</th>
+<th style="text-align: center;">GVIF^(1/(2×Df))</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">insulin</td>
+<td style="text-align: center;">1.113</td>
+<td style="text-align: center;">3</td>
+<td style="text-align: center;">1.018</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">age</td>
+<td style="text-align: center;">1.187</td>
+<td style="text-align: center;">2</td>
+<td style="text-align: center;">1.044</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">gender</td>
+<td style="text-align: center;">1.028</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">1.014</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">race</td>
+<td style="text-align: center;">1.108</td>
+<td style="text-align: center;">2</td>
+<td style="text-align: center;">1.026</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">num_medications</td>
+<td style="text-align: center;">1.398</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">1.182</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">time_in_hospital</td>
+<td style="text-align: center;">1.285</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">1.134</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">number_emergency</td>
+<td style="text-align: center;">1.226</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">1.107</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">number_inpatient</td>
+<td style="text-align: center;">2.113</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">1.454</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">admission_type_id</td>
+<td style="text-align: center;">1.094</td>
+<td style="text-align: center;">3</td>
+<td style="text-align: center;">1.015</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">encounter_index_trunc</td>
+<td style="text-align: center;">1.983</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">1.408</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Based on this variance inflation factor table, all variance inflation factors were low (GVIF^(1/(2×Df)) ≈ 1–2), indicating no evidence of harmful multicollinearity among the predictors. Even the highest values—for the truncated encounter index (1.41) and the number of prior inpatient visits (1.45)—remain well below common concern thresholds (typically 2–5), suggesting that multicollinearity is minimal and unlikely to meaningfully bias the coefficient estimates.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="667_Group4_files/figure-html/cooks-figure-1.png" class="img-fluid figure-img" width="672"></p>
+<figcaption>Cook’s Distance for Influential Observations</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The Cook’s distance plot shows that all influence values are extremely small and far below commonly used thresholds. This indicates that no single observation had a notable impact on the fitted GLM.</p>
+<p>The dispersion estimate was φ = 0.97, which is very close to 1, indicating no evidence of overdispersion in the logistic GLM.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="667_Group4_files/figure-html/devres-figure-1.png" class="img-fluid figure-img" width="672"></p>
+<figcaption>Deviance Residuals vs Fitted Probabilities</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The residual plot of deviance residuals against fitted values shows a symmetric, funnel-shaped pattern typical of logistic regression and no systematic structure, indicating that the model fits reasonably well.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="667_Group4_files/figure-html/pearson-figure-1.png" class="img-fluid figure-img" width="672"></p>
+<figcaption>Pearson Residuals vs Fitted Probabilities</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The Pearson residuals against fitted values show the expected curved pattern for logistic regression and no systematic structure, indicating acceptable model fit.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="667_Group4_files/figure-html/roc-figure-1.png" class="img-fluid figure-img" width="672"></p>
+<figcaption>ROC Curve for Logistic GLM</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The Hosmer–Lemeshow test gave a p-value of 0.66, indicates no evidence of poor calibration. The predicted and observed readmission rates are reasonably aligned. However, the AUC was 0.586, so the model’s ability to distinguish between readmitted and non-readmitted patients is only slightly better than chance.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="667_Group4_files/figure-html/traj-figure-1.png" class="img-fluid figure-img" width="672"></p>
+<figcaption>Trajectory of Readmission Rates Across Encounters, Stratified by Insulin Regimen</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The trajectory plot of observed readmission proportions across encounter index and insulin regimen shows clearly non-parallel paths, suggesting that the encounter effect is not the same for all groups.</p>
+<p>Including the insulin × encounter_index_trunc interaction improved model fit (AIC decreased from 4026 to 4014), and several interaction terms were statistically significant. InsulinSteady×Encounter_index (p = 0.003) and InsulinUp×Encounter_index (p &lt; 0.0001) showed strong evidence that the effect of encounter index differs by insulin group. This indicates that the association between encounter index and readmission is not constant across insulin categories.</p>
+<p>The trajectory plot result is consistent with the significant interaction terms in the GLM. Together, they suggest that the slope linking encounter index to readmission probability varies by insulin status. This provides justification for modeling strategies that allow group-specific slopes or correlated repeated measures, rather than relying on a single common slope for all insulin groups.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="667_Group4_files/figure-html/glm-marginal-traj-1.png" class="img-fluid figure-img" width="672"></p>
+<figcaption>Model-based predicted 30-day readmission probabilities by encounter index and insulin regimen (GLM with insulin × encounter index interaction)</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The model-based GLM prediction curves recapitulate the non-parallel trajectories observed in the raw data, with the “No insulin” group showing a pronounced decline in readmission probability over encounters and the insulin-treated groups following flatter, persistently higher-risk curves. This pattern closely aligns with the GLMM-based predictions, indicating that the key insulin-by-time interaction is robust to the choice between marginal and mixed-effects modeling frameworks.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="667_Group4_files/figure-html/lag1-figure-1.png" class="img-fluid figure-img" width="672"></p>
+<figcaption>Lag-1 Pearson Residual Plot</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The lag-1 Pearson residual plot shows clear clustering and diagonal patterns, indicating positive autocorrelation between residuals from consecutive encounters. This violates the independence assumption of the GLM and suggests that within-patient correlation is present, making methods such as GEE or GLMM more appropriate.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table caption-top table-sm table-striped small" data-quarto-postprocess="true">
+<caption>Model-Based vs. Cluster-Robust Standard Errors</caption>
+<thead>
+<tr class="header">
+<th style="text-align: center;" data-quarto-table-cell-role="th">Term</th>
+<th style="text-align: center;" data-quarto-table-cell-role="th">Estimate</th>
+<th style="text-align: center;" data-quarto-table-cell-role="th">SE_Model</th>
+<th style="text-align: center;" data-quarto-table-cell-role="th">p_Model</th>
+<th style="text-align: center;" data-quarto-table-cell-role="th">SE_Robust</th>
+<th style="text-align: center;" data-quarto-table-cell-role="th">p_Robust</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: center;">(Intercept)</td>
+<td style="text-align: center;">-1.3158</td>
+<td style="text-align: center;">0.1731</td>
+<td style="text-align: center;">0.0000</td>
+<td style="text-align: center;">0.1860</td>
+<td style="text-align: center;">0.0000</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;">insulinDown</td>
+<td style="text-align: center;">0.1194</td>
+<td style="text-align: center;">0.1245</td>
+<td style="text-align: center;">0.3379</td>
+<td style="text-align: center;">0.1291</td>
+<td style="text-align: center;">0.3554</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;">insulinSteady</td>
+<td style="text-align: center;">0.1828</td>
+<td style="text-align: center;">0.0958</td>
+<td style="text-align: center;">0.0564</td>
+<td style="text-align: center;">0.0961</td>
+<td style="text-align: center;">0.0572</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;">insulinUp</td>
+<td style="text-align: center;">0.1489</td>
+<td style="text-align: center;">0.1266</td>
+<td style="text-align: center;">0.2396</td>
+<td style="text-align: center;">0.1258</td>
+<td style="text-align: center;">0.2365</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;">age&gt;=80</td>
+<td style="text-align: center;">-0.1354</td>
+<td style="text-align: center;">0.1362</td>
+<td style="text-align: center;">0.3201</td>
+<td style="text-align: center;">0.1557</td>
+<td style="text-align: center;">0.3845</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;">age50-80</td>
+<td style="text-align: center;">-0.2418</td>
+<td style="text-align: center;">0.1121</td>
+<td style="text-align: center;">0.0310</td>
+<td style="text-align: center;">0.1316</td>
+<td style="text-align: center;">0.0662</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;">genderMale</td>
+<td style="text-align: center;">0.0052</td>
+<td style="text-align: center;">0.0809</td>
+<td style="text-align: center;">0.9484</td>
+<td style="text-align: center;">0.0867</td>
+<td style="text-align: center;">0.9518</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;">raceCaucasian</td>
+<td style="text-align: center;">-0.0362</td>
+<td style="text-align: center;">0.1020</td>
+<td style="text-align: center;">0.7226</td>
+<td style="text-align: center;">0.1087</td>
+<td style="text-align: center;">0.7390</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;">raceOther</td>
+<td style="text-align: center;">-0.0375</td>
+<td style="text-align: center;">0.2496</td>
+<td style="text-align: center;">0.8806</td>
+<td style="text-align: center;">0.2225</td>
+<td style="text-align: center;">0.8662</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;">num_medications</td>
+<td style="text-align: center;">0.0126</td>
+<td style="text-align: center;">0.0058</td>
+<td style="text-align: center;">0.0294</td>
+<td style="text-align: center;">0.0061</td>
+<td style="text-align: center;">0.0401</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;">time_in_hospital</td>
+<td style="text-align: center;">0.0115</td>
+<td style="text-align: center;">0.0149</td>
+<td style="text-align: center;">0.4399</td>
+<td style="text-align: center;">0.0144</td>
+<td style="text-align: center;">0.4239</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;">number_emergency</td>
+<td style="text-align: center;">0.0706</td>
+<td style="text-align: center;">0.0316</td>
+<td style="text-align: center;">0.0254</td>
+<td style="text-align: center;">0.0344</td>
+<td style="text-align: center;">0.0403</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;">number_inpatient</td>
+<td style="text-align: center;">0.1629</td>
+<td style="text-align: center;">0.0359</td>
+<td style="text-align: center;">0.0000</td>
+<td style="text-align: center;">0.0341</td>
+<td style="text-align: center;">0.0000</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;">admission_type_id2</td>
+<td style="text-align: center;">0.0630</td>
+<td style="text-align: center;">0.1082</td>
+<td style="text-align: center;">0.5606</td>
+<td style="text-align: center;">0.1071</td>
+<td style="text-align: center;">0.5565</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;">admission_type_id3</td>
+<td style="text-align: center;">-0.1024</td>
+<td style="text-align: center;">0.1135</td>
+<td style="text-align: center;">0.3670</td>
+<td style="text-align: center;">0.1104</td>
+<td style="text-align: center;">0.3538</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;">admission_type_id5</td>
+<td style="text-align: center;">-0.1627</td>
+<td style="text-align: center;">0.1490</td>
+<td style="text-align: center;">0.2749</td>
+<td style="text-align: center;">0.1417</td>
+<td style="text-align: center;">0.2508</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;">encounter_index_trunc</td>
+<td style="text-align: center;">-0.2164</td>
+<td style="text-align: center;">0.0463</td>
+<td style="text-align: center;">0.0000</td>
+<td style="text-align: center;">0.0512</td>
+<td style="text-align: center;">0.0000</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Cluster-robust standard errors were computed to adjust for within-patient correlation across repeated encounters. While coefficient estimates were unchanged, several standard errors increased. Notably, the age 50–80 category was no longer statistically significant under the robust SEs (p = 0.066, from the table comparing model-based and cluster-robust standard errors), indicating that the naïve GLM slightly underestimated uncertainty. The main conclusions for number of medications, emergency visits, inpatient visits, and the encounter index remained robust.</p>
+</section>
+<section id="gee" class="level3">
+<h3 class="anchored" data-anchor-id="gee">GEE</h3>
+<p>Generalized Estimating Equations (GEE) provide an alternative framework for analyzing correlated binary outcomes that targets population-averaged effects while accounting for within-cluster correlation through a working correlation structure. In the context of our data, a GEE approach would treat repeated encounters within the same patient as a cluster and estimate marginal log-odds ratios for insulin regimen, encounter history, and their interaction, with robust (“sandwich”) standard errors that remain valid even if the working correlation is misspecified.</p>
+<p>Conceptually, the GEE model occupies a middle ground between the independence GLM with cluster-robust standard errors and the subject-specific GLMM. Like the robust GLM, GEE emphasizes average effects at the population level rather than individual patient trajectories. At the same time, it explicitly encodes correlation through, for example, an exchangeable or autoregressive working structure rather than relying solely on cluster-robust variance estimates. Because our primary scientific questions focused on patient-level heterogeneity in baseline risk and rate of change over time, as well as on decomposing variance into within- and between-patient components, we elected to emphasize the GLMM as the main longitudinal modeling strategy.</p>
+<p>To connect the subject-specific GLMM estimates back to a population-averaged interpretation analogous to GEE, we applied Zeger’s attenuation method to approximate marginal effects from the random-slope model. The close agreement between conditional and approximate marginal odds ratios suggests that, in this data set, the choice between a GEE-type marginal model and a mixed-effects model is unlikely to materially alter substantive conclusions. We therefore view the GLMM and the marginal GLM with robust standard errors as complementary perspectives on the same underlying associations, with the former providing richer insight into individual trajectories.</p>
+</section>
+<section id="glmm" class="level3">
+<h3 class="anchored" data-anchor-id="glmm">GLMM</h3>
+<section id="exploratory-plots" class="level4">
+<h4 class="anchored" data-anchor-id="exploratory-plots">Exploratory plots</h4>
+<p>Four numeric covariates were standardized to facilitate model convergence and improve the numerical stability of the optimization algorithm. Use centered time (encounter_index_trunc_c = encounter_index_trunc - mean(encounter_index_trunc)) for easier interpretation of main effects.</p>
+</section>
+<section id="fit-random-intercept-model" class="level4">
+<h4 class="anchored" data-anchor-id="fit-random-intercept-model">Fit random intercept model</h4>
+<p>We employed adaptive Gauss-Hermite quadrature with 10 integration points (nAGQ = 10) rather than the standard Laplace approximation (nAGQ = 1). For binary response data, the standard Laplace approximation is known to potentially underestimate the variance of random effects and introduce bias into the fixed effects coefficients. Increasing the number of quadrature points provides a more accurate approximation of the log-likelihood, thereby yielding more reliable parameter estimates.</p>
+<p>We need LRT to check the interaction term</p>
+<p>To assess whether the effect of time (encounter index) on readmission risk varies by insulin status, we compared the full model (including the interaction term) against a reduced model (main effects only) using a Likelihood Ratio Test (LRT).</p>
+<p>The LRT indicated that the inclusion of the interaction term <code>insulin * encounter_index_trunc_c</code> resulted in a statistically significant improvement in model fit (<span class="math inline">\(\chi^2(3) = 16.11\)</span>, <span class="math inline">\(p &lt; 0.005\)</span>). Furthermore, the Akaike Information Criterion (AIC) decreased substantially from 4019.0 in the reduced model to 4008.9 in the full model, confirming that the interaction model provides a superior fit to the data. This suggests that the trajectory of readmission risk over time is significantly different depending on the patient’s insulin regimen.</p>
+</section>
+<section id="random-slopes-model" class="level4">
+<h4 class="anchored" data-anchor-id="random-slopes-model">Random Slopes Model</h4>
+<p>nAGQ = 10 can’t be used in the random slope model, so we use nAGQ = 1 here.</p>
+<p>We evaluated the necessity of including random slopes for the time effect (<code>encounter_index_trunc_c</code>) to allow for inter-individual variation in the trajectory of readmission risk. A Likelihood Ratio Test comparing the random-slope model (<code>m3</code>) against the random-intercept-only model (<code>m1</code>) showed a statistically significant improvement in model fit (<span class="math inline">\(\chi^2(2) = 14.42\)</span>, <span class="math inline">\(p &lt; 0.001\)</span>). Additionally, the random-slope model exhibited a lower AIC (3998.5 vs.&nbsp;4008.9), indicating a better trade-off between goodness of fit and model complexity. Consequently, we selected the random-slope model (<code>m3</code>) as the final model. This suggests that not only do baseline risks vary across patients, but the rate of change in readmission risk over time also varies significantly between individuals.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table caption-top table-sm table-striped small" data-quarto-postprocess="true">
+<caption>Model comparison for mixed-effects specifications of 30-day readmission</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;" data-quarto-table-cell-role="th">Model</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">Specification</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">AIC</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">Decision</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">LRT χ² (vs simpler)</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">p-value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">M0: RI, main effects</td>
+<td style="text-align: left;">Random intercept; no Insulin × Time</td>
+<td style="text-align: left;">4019.033</td>
+<td style="text-align: left;">Reference</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;">-</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">M1: RI, + Insulin × Time</td>
+<td style="text-align: left;">Random intercept; Insulin × Time</td>
+<td style="text-align: left;">4008.928</td>
+<td style="text-align: left;">Keep interaction</td>
+<td style="text-align: left;">16.1</td>
+<td style="text-align: left;">0.00108</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">M2: RS, + Insulin × Time</td>
+<td style="text-align: left;">Random intercept + random slope; Insulin × Time</td>
+<td style="text-align: left;">3998.512</td>
+<td style="text-align: left;">Final model</td>
+<td style="text-align: left;">14.42</td>
+<td style="text-align: left;">0.000741</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<hr>
+</section>
+<section id="interaction-effects" class="level4">
+<h4 class="anchored" data-anchor-id="interaction-effects">Interaction Effects</h4>
+<p>There was a significant interaction between insulin status and the timing of encounters. For the reference group (patients not on insulin), the probability of 30-day readmission showed a steep and significant decline over successive visits (<span class="math inline">\(\beta_{time} = -0.462\)</span>, <span class="math inline">\(p &lt; 0.001\)</span>). However, this protective temporal trend was significantly attenuated for patients on steady insulin (<span class="math inline">\(\beta_{interaction} = 0.232\)</span>, <span class="math inline">\(p = 0.014\)</span>) and further diminished for patients whose insulin dosage was increased (<span class="math inline">\(\beta_{interaction} = 0.329\)</span>, <span class="math inline">\(p = 0.004\)</span>). This indicates that while Insulin Up patients did experience a marginal reduction in risk over time, their <strong>rate of recovery was significantly slower and flatter</strong> compared to patients not requiring insulin therapy.</p>
+</section>
+<section id="icc-and-variance" class="level4">
+<h4 class="anchored" data-anchor-id="icc-and-variance">ICC and Variance</h4>
+<p>The Adjusted Intraclass Correlation Coefficient (ICC) was 0.113, indicating that approximately 11.3% of the latent variation in readmission risk is attributable to unobserved heterogeneity between patients (such as unique genetics, chronic frailty, or compliance behavior). The remaining variation is driven by within-patient time-varying factors or random noise. An ICC exceeding 10% confirms substantial clustering within subjects, validating the necessity of the mixed-effects framework to account for non-independence in the data.</p>
+</section>
+<section id="covariance-matrix" class="level4">
+<h4 class="anchored" data-anchor-id="covariance-matrix">Covariance Matrix</h4>
+<p>The model’s direct Maximum Likelihood Estimation (MLE) of the covariance matrix yielded a correlation coefficient of only <span class="math inline">\(\rho = -0.04\)</span>. This parameter represents the unbiased population-level relationship. A correlation of -0.04 is statistically negligible, indicating that in the true underlying population, a patient’s baseline risk level is effectively independent of their rate of change over time.</p>
+</section>
+<section id="diagnostic" class="level4">
+<h4 class="anchored" data-anchor-id="diagnostic">Diagnostic</h4>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="667_Group4_files/figure-html/glmm-randef-1.png" class="img-fluid figure-img" width="672"></p>
+<figcaption>Random intercept and slope diagnostics for GLMM m3</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p><strong>Evaluation of Random Effects Structure:</strong> The diagnostic plots for the random effects structure (Model <code>m3</code>) revealed deviations from ideal normality for both random intercepts and random slopes. The Q-Q plots exhibit a “stepped” pattern, which is a characteristic artifact in generalized linear mixed models (GLMMs) when the outcome is binary and cluster sizes are small (i.e., limited visits per patient).</p>
+<p>Despite these deviations, two key insights emerged: 1. Correlation of Effects: We observed a moderate negative correlation (<span class="math inline">\(\rho = -0.291\)</span>) between the random intercepts and slopes. This suggests a regression to the mean dynamic: patients with higher baseline risks (higher intercepts) tend to experience a sharper decline in risk over time (more negative slopes), whereas lower-risk patients exhibit more stable trajectories. 2. Model Robustness: Although the random effects distributions are not perfectly normal, previous simulation studies in GLMMs have demonstrated that fixed effect estimates remain robust to misspecification of the random effects distribution, especially given our large sample size. Therefore, retaining the random-slope structure provides a more realistic representation of patient heterogeneity without compromising the validity of the fixed effect inferences.</p>
+<p>The discrepancy between the visual estimate (-0.291) and the model estimate (-0.04) is explained by the <strong>‘Shrinkage Effect’</strong> common in GLMMs. Because many patients have few visits, the model ‘shrinks’ their uncertain individual estimates toward the population mean, which mathematically forces a spurious negative correlation in the scatterplot. <strong>Therefore, we rely on the model output (-0.04) as the valid inference.</strong> Our final clinical conclusion is that a patient’s starting frailty (intercept) does not predict how fast they will stabilize (slope); these are two distinct biological characteristics.</p>
+<p>We assessed multicollinearity using the Generalized Variance Inflation Factor (GVIF). All predictors showed low GVIF values, falling well below the conservative threshold of 5.</p>
+</section>
+<section id="simulation" class="level4">
+<h4 class="anchored" data-anchor-id="simulation">Simulation</h4>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="667_Group4_files/figure-html/sim-heterogeneity-1.png" class="img-fluid figure-img" width="672"></p>
+<figcaption>Simulated readmission trajectories under varying baseline risk and recovery speed (Random-slope GLMM m3)</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>Our Random Slope model (m3) reveals a more nuanced reality because the correlation between baseline and slope is near zero. A simulation plot illustrates six illustrative scenarios defined by two clinically meaningful dimensions. The color encodes starting risk (high-, average-, and low-risk baselines), and the line type encodes recovery speed (fast versus slow decline in risk over encounters). Among otherwise similar high-risk patients, those with fast recovery exhibit a steep drop in readmission probability over visits, whereas those with slow recovery remain persistently high-risk despite repeated encounters. Distinguishing between these patterns is critical for targeting limited care-management resources toward patients whose trajectories are resistant to improvement.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="667_Group4_files/figure-html/subject-trajectories-1.png" class="img-fluid figure-img" width="672"></p>
+<figcaption>Subject-specific predicted trajectories for a random sample of nine patients (Random-slope GLMM m3)</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Conditional (GLMM) vs.&nbsp;Approximate Marginal (Zeger) Effects</caption>
+<colgroup>
+<col style="width: 43%">
+<col style="width: 11%">
+<col style="width: 9%">
+<col style="width: 19%">
+<col style="width: 17%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">term</th>
+<th style="text-align: right;">Cond_Beta</th>
+<th style="text-align: right;">Cond_OR</th>
+<th style="text-align: right;">Marg_Beta_Approx</th>
+<th style="text-align: right;">Marg_OR_Approx</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">insulinDown</td>
+<td style="text-align: right;">0.170</td>
+<td style="text-align: right;">1.186</td>
+<td style="text-align: right;">0.165</td>
+<td style="text-align: right;">1.180</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">insulinSteady</td>
+<td style="text-align: right;">0.239</td>
+<td style="text-align: right;">1.270</td>
+<td style="text-align: right;">0.232</td>
+<td style="text-align: right;">1.261</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">insulinUp</td>
+<td style="text-align: right;">0.121</td>
+<td style="text-align: right;">1.129</td>
+<td style="text-align: right;">0.118</td>
+<td style="text-align: right;">1.125</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">encounter_index_trunc_c</td>
+<td style="text-align: right;">-0.462</td>
+<td style="text-align: right;">0.630</td>
+<td style="text-align: right;">-0.449</td>
+<td style="text-align: right;">0.638</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">time_in_hospital</td>
+<td style="text-align: right;">0.046</td>
+<td style="text-align: right;">1.047</td>
+<td style="text-align: right;">0.044</td>
+<td style="text-align: right;">1.045</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">num_medications</td>
+<td style="text-align: right;">0.096</td>
+<td style="text-align: right;">1.100</td>
+<td style="text-align: right;">0.093</td>
+<td style="text-align: right;">1.097</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">number_emergency</td>
+<td style="text-align: right;">0.083</td>
+<td style="text-align: right;">1.087</td>
+<td style="text-align: right;">0.081</td>
+<td style="text-align: right;">1.084</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">number_inpatient</td>
+<td style="text-align: right;">0.152</td>
+<td style="text-align: right;">1.164</td>
+<td style="text-align: right;">0.148</td>
+<td style="text-align: right;">1.159</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">admission_type_id2</td>
+<td style="text-align: right;">0.063</td>
+<td style="text-align: right;">1.065</td>
+<td style="text-align: right;">0.061</td>
+<td style="text-align: right;">1.063</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">admission_type_id3</td>
+<td style="text-align: right;">-0.107</td>
+<td style="text-align: right;">0.899</td>
+<td style="text-align: right;">-0.104</td>
+<td style="text-align: right;">0.901</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">admission_type_id5</td>
+<td style="text-align: right;">-0.147</td>
+<td style="text-align: right;">0.864</td>
+<td style="text-align: right;">-0.142</td>
+<td style="text-align: right;">0.867</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">age&lt;=50</td>
+<td style="text-align: right;">0.212</td>
+<td style="text-align: right;">1.236</td>
+<td style="text-align: right;">0.206</td>
+<td style="text-align: right;">1.229</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">age&gt;=80</td>
+<td style="text-align: right;">0.130</td>
+<td style="text-align: right;">1.139</td>
+<td style="text-align: right;">0.126</td>
+<td style="text-align: right;">1.134</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">genderMale</td>
+<td style="text-align: right;">-0.012</td>
+<td style="text-align: right;">0.988</td>
+<td style="text-align: right;">-0.012</td>
+<td style="text-align: right;">0.989</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">raceCaucasian</td>
+<td style="text-align: right;">-0.037</td>
+<td style="text-align: right;">0.964</td>
+<td style="text-align: right;">-0.036</td>
+<td style="text-align: right;">0.965</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">raceOther</td>
+<td style="text-align: right;">0.004</td>
+<td style="text-align: right;">1.004</td>
+<td style="text-align: right;">0.004</td>
+<td style="text-align: right;">1.004</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">insulinDown:encounter_index_trunc_c</td>
+<td style="text-align: right;">0.126</td>
+<td style="text-align: right;">1.134</td>
+<td style="text-align: right;">0.122</td>
+<td style="text-align: right;">1.130</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">insulinSteady:encounter_index_trunc_c</td>
+<td style="text-align: right;">0.232</td>
+<td style="text-align: right;">1.261</td>
+<td style="text-align: right;">0.225</td>
+<td style="text-align: right;">1.253</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">insulinUp:encounter_index_trunc_c</td>
+<td style="text-align: right;">0.329</td>
+<td style="text-align: right;">1.389</td>
+<td style="text-align: right;">0.319</td>
+<td style="text-align: right;">1.376</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<hr>
+</section>
+<section id="results-analysis-of-30-day-readmission-risk-random-slope-glmm" class="level4">
+<h4 class="anchored" data-anchor-id="results-analysis-of-30-day-readmission-risk-random-slope-glmm">Results: Analysis of 30-Day Readmission Risk (Random-Slope GLMM)</h4>
+<section id="model-specification-and-estimation" class="level5">
+<h5 class="anchored" data-anchor-id="model-specification-and-estimation">1. Model Specification and Estimation</h5>
+<p>To formally account for correlation among repeated encounters within patients, we fitted a logistic Generalized Linear Mixed Model (GLMM). Let <span class="math inline">\(Y_{ij}\)</span> denote the 30-day readmission indicator for patient <span class="math inline">\(i\)</span> at encounter <span class="math inline">\(j\)</span>, and let <span class="math inline">\(\text{Time}_{ij}\)</span> denote the centered, truncated encounter index. The conditional log-odds of readmission are modeled as <span class="math display">\[
+\text{logit}\{\Pr(Y_{ij}=1 \mid \mathbf{b}_i)\}
+= \beta_0
+  + \boldsymbol{\beta}_{\text{Ins}}^\top \mathbf{Z}_{\text{Ins},ij}
+  + \beta_{\text{Time}} \,\text{Time}_{ij}
+  + \boldsymbol{\beta}_{\text{Int}}^\top \big(\mathbf{Z}_{\text{Ins},ij} \times \text{Time}_{ij}\big)
+  + \boldsymbol{\gamma}^\top \mathbf{X}_{ij}
+  + b_{0i} + b_{1i}\,\text{Time}_{ij},
+\]</span> where <span class="math inline">\(\mathbf{Z}_{\text{Ins},ij}\)</span> encodes insulin regimen, <span class="math inline">\(\mathbf{X}_{ij}\)</span> collects additional covariates (length of stay, number of medications, prior emergency and inpatient visits, admission type, age group, gender, and race), and <span class="math inline">\(\mathbf{b}_i=(b_{0i},b_{1i})^\top\)</span> are patient-specific random effects. We assumed a bivariate normal distribution for the random effects, <span class="math display">\[
+\mathbf{b}_i \sim N\!\left(
+  \begin{pmatrix}0 \\[2pt] 0\end{pmatrix},
+  \begin{pmatrix}
+    \sigma_0^2 &amp; \rho\,\sigma_0\sigma_1 \\
+    \rho\,\sigma_0\sigma_1 &amp; \sigma_1^2
+  \end{pmatrix}
+\right),
+\]</span> so that <span class="math inline">\(\sigma_0^2\)</span> and <span class="math inline">\(\sigma_1^2\)</span> represent between-patient variability in baseline risk and time trends, respectively, and <span class="math inline">\(\rho\)</span> captures the correlation between baseline risk and slope. Under this parameterization, an approximate marginal intraclass correlation coefficient (ICC) for the latent propensity to be readmitted can be defined as <span class="math display">\[
+\text{ICC}
+= \frac{\sigma_0^2}{\sigma_0^2 + \pi^2/3},
+\]</span> where <span class="math inline">\(\pi^2/3\)</span> is the variance of the standard logistic distribution. Fixed effects were estimated by maximum likelihood using adaptive Gauss–Hermite quadrature for the random-intercept model and the Laplace approximation for the random-slope model.</p>
+<p>Model selection proceeded in stages. We first compared a random-intercept model with and without the insulin-by-time interaction using a Likelihood Ratio Test (LRT) and Akaike Information Criterion (AIC), then compared the best-fitting random-intercept model against a random-slope specification. The inclusion of the insulin-by-time interaction significantly improved model fit (<span class="math inline">\(\chi^2(3) = 16.11\)</span>, <span class="math inline">\(p &lt; 0.005\)</span>, AIC: 4008.9 vs.&nbsp;4019.0). Allowing random slopes for time further improved fit relative to the random-intercept model (<span class="math inline">\(\chi^2(2) = 14.42\)</span>, <span class="math inline">\(p &lt; 0.001\)</span>, AIC: 3998.5 vs.&nbsp;4008.9), indicating substantial between-patient heterogeneity in both baseline risk and trajectories over time. Consequently, the random-slope GLMM (model <code>m3</code>) was adopted as the primary longitudinal model.</p>
+</section>
+<section id="random-effects-and-subject-heterogeneity" class="level5">
+<h5 class="anchored" data-anchor-id="random-effects-and-subject-heterogeneity">2. Random Effects and Subject Heterogeneity</h5>
+<p>The final model revealed substantial patient heterogeneity. The variance of the random intercept was <strong>0.175</strong> (<span class="math inline">\(\text{SD} = 0.418\)</span>), indicating significant differences in initial frailty across patients. The variance of the random slope was <strong>0.165</strong> (<span class="math inline">\(\text{SD} = 0.406\)</span>), confirming that patients recover (or deteriorate) at significantly different rates. The correlation between random intercepts and slopes was negligible (<span class="math inline">\(\rho = -0.04\)</span>), suggesting that a patient’s baseline risk is largely independent of their rate of recovery. The Adjusted Intraclass Correlation Coefficient (ICC) was <strong>0.113</strong>, implying that approximately <strong>11.3%</strong> of the variation in readmission risk is attributable to unobserved subject-specific characteristics.</p>
+</section>
+<section id="fixed-effects-the-interaction-of-insulin-and-time" class="level5">
+<h5 class="anchored" data-anchor-id="fixed-effects-the-interaction-of-insulin-and-time">3. Fixed Effects: The Interaction of Insulin and Time</h5>
+<p>The analysis demonstrated a significant interaction between insulin status and the timing of encounters. Protective Trend in Reference Group: For patients not on insulin, the probability of readmission decreased steeply with successive visits (<span class="math inline">\(\text{Cond. OR} = 0.630\)</span>, <span class="math inline">\(\beta = -0.462, p &lt; 0.001\)</span>), indicating a strong ‘learning’ or stabilization effect. Attenuation in Insulin Groups: This protective temporal trend was significantly blunted for patients on insulin. The interaction term for the Insulin Steady group was significant (<span class="math inline">\(\beta_{interaction} = 0.232, p = 0.014\)</span>), and even more pronounced for the Insulin Up group (<span class="math inline">\(\beta_{interaction} = 0.329, p = 0.004\)</span>). While ‘Insulin Up’ patients still experienced a slight decrease in risk over time (Net slope <span class="math inline">\(\approx -0.13\)</span>), their rate of improvement was significantly slower compared to the reference group.</p>
+</section>
+<section id="conditional-vs.-approximate-marginal-effects-zeger-method" class="level5">
+<h5 class="anchored" data-anchor-id="conditional-vs.-approximate-marginal-effects-zeger-method">4. Conditional vs.&nbsp;Approximate Marginal Effects (Zeger Method)</h5>
+<p>Since GLMM parameters represent subject-specific (conditional) effects, we applied Zeger’s method to approximate population-averaged (marginal) effects.The Zeger attenuation factor was <strong>1.03</strong>, resulting in a modest <strong>2.89% reduction</strong> in effect sizes when scaling from the individual to the population level. The Conditional ORs and Marginal ORs remained highly consistent (e.g., Insulin Up Cond. OR = 1.129 vs.&nbsp;Marg. OR = 1.125). This suggests that despite patient heterogeneity, the observed risk factors apply robustly to the population average.</p>
+</section>
+<section id="other-clinical-predictors" class="level5">
+<h5 class="anchored" data-anchor-id="other-clinical-predictors">5. Other Clinical Predictors</h5>
+<p>Controlling for the time-insulin interaction, other clinical factors showed the following associations: Prior inpatient visits remained a significant predictor, with each additional visit increasing the odds of readmission by 16.4% (<span class="math inline">\(\text{Cond. OR} = 1.164, p = 0.019\)</span>).The number of medications showed a borderline significant association (<span class="math inline">\(\text{Cond. OR} = 1.100, p = 0.051\)</span>), serving as a likely proxy for comorbidity complexity. Age, gender, and race were not statistically significant in this adjusted longitudinal framework.</p>
+<hr>
+</section>
+</section>
+<section id="summary-conclusion" class="level4">
+<h4 class="anchored" data-anchor-id="summary-conclusion">Summary Conclusion</h4>
+<p>In conclusion, the <strong>Random Slope model</strong> provides superior fit, revealing that patients differ not only in their baseline risk but also in their recovery trajectories. While the “No Insulin” group exhibits a rapid decline in readmission risk over repeated encounters, patients requiring insulin dose escalation (“Insulin Up”) show a significantly <strong>flatter recovery curve</strong>. This suggests that insulin intensification serves as a marker for a more resistant, high-risk phenotype that benefits less from the standard “stabilization over time” effect.</p>
+</section>
+</section>
+<section id="comparison" class="level3">
+<h3 class="anchored" data-anchor-id="comparison">Comparison</h3>
+<p>We compared a series of modeling strategies that make different assumptions about within-patient correlation and target different inferential estimands. The baseline analysis used a standard logistic GLM treating encounters as independent. This model provided interpretable population-averaged odds ratios and adequate global fit (Hosmer–Lemeshow p = 0.66), but the modest discrimination (AUC ≈ 0.59) and evidence of serial correlation in the lag-1 Pearson residual plot indicated that the independence assumption was violated. Cluster-robust (sandwich) standard errors partially addressed this issue by inflating uncertainty for clustered observations without altering point estimates; several covariates, such as age 50–80, lost nominal statistical significance under robust SEs, highlighting that the naïve GLM underestimated uncertainty.</p>
+<p>We then fitted a subject-specific Generalized Linear Mixed Model (GLMM) with random intercepts and, subsequently, random slopes for encounter index. Compared with the marginal GLM, the GLMM yielded effect estimates of similar magnitude for key clinical predictors (e.g., prior inpatient utilization, number of medications), but revealed substantial between-patient heterogeneity in both baseline risk and trajectories over time. The variance components (intercept SD ≈ 0.42, slope SD ≈ 0.41) and an adjusted ICC of 0.113 showed that approximately 11% of the variability in readmission risk was attributable to unobserved patient-level factors. Likelihood ratio tests and AIC clearly favored the random-slope model over both the random-intercept-only GLMM and the marginal GLM, indicating that allowing patient-specific time trends meaningfully improves model fit.</p>
+<p>From an inferential perspective, the GLMM focuses on subject-specific (conditional) effects, while the GLM with cluster-robust standard errors targets population-averaged effects. Using Zeger’s attenuation factor (~1.03), we showed that conditional and approximate marginal odds ratios from the GLMM were nearly identical, suggesting that the substantive conclusions are robust to the choice of estimand. In particular, the insulin-by-time interaction remained significant and directionally consistent across all frameworks: patients in the “No insulin” group experienced a steep decline in readmission risk with successive encounters, whereas those with insulin dose escalation (“Insulin Up”) showed a markedly attenuated improvement. Overall, the comparison indicates that while simpler marginal models capture the main average effects, the random-slope GLMM is better suited to describing clinically relevant heterogeneity in longitudinal readmission trajectories.</p>
+<p>Taken together, these results highlight clear trade-offs among the candidate models. The independence GLM is simple, computationally efficient, and yields easily interpretable population-averaged odds ratios, but it rests on an implausible independence assumption and underestimates uncertainty when within-patient correlation is present. The GLM with cluster-robust standard errors relaxes the variance assumptions and provides robust population-averaged inference, yet it cannot decompose variation into within- and between-patient components or describe individual trajectories. The random-intercept GLMM captures between-patient heterogeneity in baseline risk but still imposes a common time trend for all subjects. By contrast, the random-slope GLMM allows both baseline risk and the rate of change over time to vary by patient, accommodates the observed correlation structure, and, after Zeger attenuation, yields marginal effects that closely align with the robust GLM. For these reasons, we base our primary clinical interpretations and recommendations on the random-slope GLMM, using the marginal GLM with cluster-robust standard errors as a complementary sensitivity analysis for population-averaged effects.</p>
+</section>
+<section id="discussion" class="level3">
+<h3 class="anchored" data-anchor-id="discussion">Discussion</h3>
+<p>In this longitudinal analysis of diabetic inpatients, we found that 30-day readmission risk declined meaningfully over successive encounters, but the magnitude of this improvement depended strongly on insulin regimen. Among patients not treated with insulin, repeated encounters were associated with a steep reduction in the odds of readmission, consistent with a stabilization or “learning” effect as care became more coordinated over time. In contrast, patients requiring insulin intensification, particularly those in the “Insulin Up” group, exhibited a much flatter trajectory: their readmission risk started higher and declined more slowly, even after adjusting for prior utilization, admission type, and comorbidity burden. Approximately 11% of the total variability in readmission risk was attributable to unobserved patient-level heterogeneity, underscoring the importance of modeling repeated measures at the individual level.</p>
+<p>These findings have several clinical implications. First, insulin intensification appears to function less as a simple treatment decision and more as a marker of a high-risk phenotype characterized by metabolic instability and treatment complexity. Such patients not only start at a higher baseline risk of readmission but also benefit less from the “usual” gains that accrue with ongoing contact with the health system. Second, the strong and persistent effects of prior inpatient and emergency visits indicate that recent healthcare utilization captures a dimension of frailty and system-level vulnerability that is not fully explained by demographic characteristics. Taken together, these results suggest that readmission reduction efforts should prioritize patients undergoing insulin escalation and those with heavy recent utilization, for example through more intensive discharge planning, early outpatient follow-up, or structured insulin titration programs.</p>
+<p>Methodologically, our study illustrates the value of explicitly accounting for within-patient correlation in longitudinal electronic health record data. Although the marginal GLM with cluster-robust standard errors produced broadly similar point estimates and adequate calibration, diagnostics revealed serial correlation that violated the independence assumption. The random-slope GLMM not only improved statistical fit but also provided a more clinically meaningful decomposition of variation into baseline risk and trajectory over time. The close agreement between conditional and approximate marginal odds ratios implies that our substantive conclusions are not an artifact of the modeling framework, but rather reflect stable underlying associations between insulin regimen, encounter history, and readmission risk.</p>
+<p>Several limitations should be considered when interpreting these results. First, the analysis relies on routinely collected administrative and clinical data, which are subject to coding error and lack detailed information on disease severity, glycemic control (e.g., HbA1c), outpatient adherence, and socioeconomic determinants of health. Residual confounding by these unmeasured factors is likely. Second, patients contributed a limited number of encounters, and the binary outcome led to non-ideal normality of the random effects, as suggested by the stepped Q–Q plots. While prior work indicates that GLMM fixed effects are robust to moderate misspecification of the random-effects distribution, this remains a potential source of bias. Third, the modest AUC (~0.59) highlights that our models, though useful for inference, are not suitable as stand-alone clinical prediction tools; future work should incorporate richer covariate information and possibly flexible machine-learning components if prediction is the primary goal.</p>
+<p>Despite these limitations, our study leverages a large, real-world cohort with repeated encounters per patient, employs rigorous diagnostic checks, and compares complementary modeling frameworks for correlated binary outcomes. The convergence of evidence across models strengthens confidence in the central conclusion: while most patients experience declining readmission risk over time, those requiring insulin escalation constitute a persistently vulnerable subgroup that does not fully “catch up” despite repeated contact with the healthcare system. Targeting this subgroup for enhanced transitional care and proactive insulin management may yield disproportionate gains in reducing potentially preventable readmissions. Future research should investigate whether interventions tailored to insulin-intensified patients can modify the trajectory we observed and explore how integrating patient-level behavioral and social data further improves risk stratification.</p>
+</section>
+<section id="conclusion" class="level3">
+<h3 class="anchored" data-anchor-id="conclusion">Conclusion</h3>
+<p>In summary, we provide a longitudinal characterization of 30-day readmission risk among patients with diabetes that integrates marginal and subject-specific modeling approaches. Readmission risk generally declines with repeated encounters, but this improvement is substantially attenuated in patients undergoing insulin escalation, who remain at persistently elevated risk even after accounting for prior utilization and other covariates. By demonstrating that conclusions are robust across GLM with robust standard errors and random-slope GLMMs, while highlighting clinically meaningful heterogeneity in individual trajectories, our work underscores the need for targeted, patient-centered strategies focused on insulin-intensified and high-utilization patients to effectively reduce preventable readmissions.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+        const codeEl = trigger.previousElementSibling.cloneNode(true);
+        for (const childEl of codeEl.children) {
+          if (isCodeAnnotation(childEl)) {
+            childEl.remove();
+          }
+        }
+        return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
