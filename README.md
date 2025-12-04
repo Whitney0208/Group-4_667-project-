@@ -40,6 +40,7 @@ The analysis employs a hierarchical modeling strategy to handle correlated data 
 
 1.  **Marginal Logistic GLM:** * Establishes population-averaged associations.
     * Uses Cluster-Robust Standard Errors (Sandwich Estimator) to account for patient-level clustering.
+2. **Generalized Estimating Equations (GEE):** uses a “working correlation structure” to approximate the within-cluster correlation
 2.  **Generalized Linear Mixed Models (GLMM):**
     * **Random Intercept:** Accounts for baseline heterogeneity in patient frailty.
     * **Random Slope:** Allows the rate of recovery (time effect) to vary by patient.
