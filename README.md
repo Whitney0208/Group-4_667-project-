@@ -1,96 +1,61 @@
 # Longitudinal Modeling of 30-Day Hospital Readmission Among Adults With Diabetes
 
-![R](https://img.shields.io/badge/Language-R-blue.svg)
-![Quarto](https://img.shields.io/badge/Tool-Quarto-blueviolet.svg)
-![Status](https://img.shields.io/badge/Status-Complete-green.svg)
-
 **Authors:** Zhangziyan Jiang, Wanbing Wang, Xiaochen Zhou, Muyao Tang, Danni Liu
 
 ---
 
-## 📖 Project Overview
+## Project Overview
 
-This repository contains a comprehensive longitudinal analysis of **30‑day hospital readmission** among adults with diabetes. Leveraging electronic health records (EHR), this project investigates how readmission risk evolves across repeated hospital encounters and quantifies the impact of different insulin regimens on patient recovery trajectories.
+This repository contains the code and report for a longitudinal analysis of 30‑day hospital readmission among adults with diabetes. Using encounter‑level electronic health record data, we study how readmission risk changes over repeated hospitalizations and how these trajectories differ across insulin regimens.
 
-### 🎯 Key Research Questions
-1.  **Temporal Evolution:** How does the risk of 30‑day readmission change with successive hospital encounters?
-2.  **Treatment Interaction:** Do readmission trajectories differ by insulin regimen (No insulin, Steady dose, Up‑titration, Down‑titration)?
-3.  **Variance Decomposition:** How much of the variability in readmission risk is attributable to between‑patient heterogeneity versus within‑patient temporal changes?
+We focus on:
+
+- How the risk of 30‑day readmission changes with encounter index.
+- Whether time trends differ between insulin regimens (No, Steady, Up, Down).
+- How much of the variation in readmission is explained by between‑patient heterogeneity.
 
 ---
 
-## 📂 Repository Structure
+## Repository Contents
 
-Based on the current file directory, the repository is organized as follows:
-
-| File Name | Description |
+| File | Description |
 | :--- | :--- |
-| `Longitudinal Modeling...qmd` | **Main Analysis Source Code.** A Quarto document containing data processing, GLM/GLMM modeling, diagnostics, and narrative text. |
-| `Longitudinal Modeling...pdf` | **Full Report (PDF).** The typeset final report generated from the analysis. |
-| `Longitudinal Modeling...html` | **Web Report (HTML).** Interactive version of the final report. |
-| `cleaned_diabetes_longitudinal.csv` | **Analysis-Ready Data.** Longitudinal dataset at the encounter level used for all models. |
-| `diabetic_data.csv` | **Raw Data.** The original dataset from which the cleaned file was derived. |
-| `variable_definitions_table.csv` | **Data Dictionary.** Definitions and coding schemas for variables used in the analysis. |
+| `Longitudinal Modeling of 30-Day Hospital Readmission Among Adults With Diabetes.qmd` | Quarto source for the full analysis (data processing, GLM/GEE/GLMM, figures, and text). |
+| `Longitudinal Modeling of 30-Day Hospital Readmission Among Adults With Diabetes.pdf` | Typeset report. |
+| `Longitudinal Modeling of 30-Day Hospital Readmission Among Adults With Diabetes.html` | HTML report. |
+| `cleaned_diabetes_longitudinal_Nov29.csv` | Analysis dataset at the encounter level. |
+| `diabetic_data.csv` | Original raw data. |
+| `variable_definitions_table.csv` | Variable definitions and coding. |
 
 ---
 
-## 📊 Methodology
+## Methods (brief)
 
-The analysis employs a hierarchical modeling strategy to handle correlated data (repeated measures within patients):
+- Marginal logistic GLM with and without truncated encounter index, with patient‑level cluster‑robust standard errors.
+- GEE with logit link and exchangeable working correlation, considering main‑effects and insulin×time mean structures.
+- Logistic GLMMs with random intercepts and random slopes for encounter index, including an insulin×time interaction; model selection based on likelihood ratio tests and AIC.
 
-1.  **Marginal Logistic GLM:** * Establishes population-averaged associations.
-    * Uses Cluster-Robust Standard Errors (Sandwich Estimator) to account for patient-level clustering.
-2. **Generalized Estimating Equations (GEE):** uses a “working correlation structure” to approximate the within-cluster correlation
-2.  **Generalized Linear Mixed Models (GLMM):**
-    * **Random Intercept:** Accounts for baseline heterogeneity in patient frailty.
-    * **Random Slope:** Allows the rate of recovery (time effect) to vary by patient.
-    * **Primary Model:** A random-slope GLMM including an `Insulin × Time` interaction term.
-
-**Statistical Stack:**
-* **Language:** R
-* **Framework:** Quarto
-* **Key Libraries:** `lme4`, `geepack`, `tidyverse`, `pROC`, `performance`, `broom.mixed`.
+Analyses are implemented in R via Quarto. Key packages include `tidyverse`, `lme4`, `geepack`, `sandwich`, `lmtest`, `pROC`, and `performance`.
 
 ---
 
-## 📉 Key Findings
+## Main Conclusions
 
-* **Learning Effect:** Among patients *not* on insulin, readmission risk declines significantly over successive encounters.
-* **The "Insulin Up" Phenotype:** Patients undergoing insulin intensification start at a higher baseline risk and experience a **significantly slower decline** in risk over time compared to non-insulin patients.
-* **Patient Heterogeneity:** The random-slope model revealed that approximately **11%** of the variability in readmission risk is attributable to unobserved between-patient differences (ICC $\approx$ 0.113).
-
----
-
-## 🛠️ How to Reproduce
-
-To regenerate the analysis and reports locally:
-
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository-url>
-    ```
-2.  **Install Dependencies:**
-    Ensure you have R installed along with the required packages (listed in the `.qmd` file).
-3.  **Render the Report:**
-    Run the following command in your terminal or RStudio console:
-    ```bash
-    quarto render "Longitudinal Modeling of 30-Day Hospital Readmission Among Adults With Diabetes.qmd"
-    ```
+- For patients not treated with insulin, 30‑day readmission risk declines as encounter index increases.
+- Patients with insulin intensification start at higher risk and show a flatter decline in readmission probability over time, even after adjustment for prior utilization and other covariates.
+- Mixed‑effects models indicate that roughly 11% of the variability in readmission risk is due to between‑patient differences (intraclass correlation about 0.11), consistent with meaningful within‑patient correlation over time.
+- Across the GLM with robust standard errors, GEE, and random‑slope GLMM, the estimated insulin‑by‑time interaction and conclusions about trajectory differences are similar. Discrimination is modest (AUC about 0.59), so the models are used for inference rather than individual‑level prediction.
 
 ---
 
-## 📝 Data Dictionary
+## Reproducibility
 
-A brief overview of key variables in `cleaned_diabetes_longitudinal.csv`:
+To rerun the analysis:
 
-* **`patient_nbr`**: Unique patient identifier.
-* **`readmit30`**: Binary outcome (1 = Readmitted within 30 days, 0 = No).
-* **`encounter_index`**: Sequential order of the hospital visit.
-* **`insulin`**: Regimen category (No, Steady, Down, Up).
-* **`encounter_index_trunc`**: Encounter index capped at 5 to handle sparsity.
+1. Open the project in R with the working directory set to the repository root.
+2. Install the R packages used in the `.qmd` file if needed.
+3. Render the report, for example from RStudio using the Knit button, or from a terminal with Quarto installed:
 
----
-
-## 📧 Contact
-
-For questions regarding the methodology or data processing, please contact the authors listed above.
+```bash
+quarto render "Longitudinal Modeling of 30-Day Hospital Readmission Among Adults With Diabetes.qmd"
+```
